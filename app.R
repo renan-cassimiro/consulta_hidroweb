@@ -38,7 +38,7 @@ ui <- navbarPage("Dados da cota do rio da HIDROWEB v3.2.0", id="inTabset", theme
                                 
                 ),
                 tags$div(id="cite",
-                    'Dados compilador de ', 
+                    'Dados compilados de ', 
                     tags$em('HIDROWEB v3.2.6: Agência Nacional das Águas'), 
                     ' por Renan Cassimiro Brito, 2022.'
                 )
@@ -260,7 +260,7 @@ server <- function(input, output, session) {
                 paste(input$codEstacao, "_mensal.csv", sep="")
             },
             content = function(file) {
-                write.csv(serie_mensal_download, file, row.names = FALSE)
+                write.csv2(serie_mensal_download, file, row.names = FALSE)
             }
         )
         
@@ -269,7 +269,7 @@ server <- function(input, output, session) {
                 paste(input$codEstacao, "_diaria.csv", sep="")
             },
             content = function(file) {
-                write.csv(serie_diaria_download, file, row.names = FALSE)
+                write.csv2(serie_diaria_download, file, row.names = FALSE)
             }
         )
         updateTabsetPanel(session, "inTabset", selected = "panel3")
