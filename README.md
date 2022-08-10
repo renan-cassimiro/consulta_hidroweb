@@ -29,11 +29,11 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="https://github.com/othneildrew/Best-README-Template">
+  <a href="https://github.com/renan-cassimiro/consulta_hidroweb">
     <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">Consulta Hidroweb</h3>
 
   <p align="center">
     An awesome README template to jumpstart your projects!
@@ -41,11 +41,11 @@
     <a href="https://github.com/renan-cassimiro/consulta_hidroweb"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/renan-cassimiro/consulta_hidroweb">View Demo</a>
+    <a href="https://github.com/renan-cassimiro/consulta_hidroweb">Demostração</a>
     ·
-    <a href="https://github.com/renan-cassimiro/consulta_hidroweb/issues">Report Bug</a>
+    <a href="https://github.com/renan-cassimiro/consulta_hidroweb/issues">Reportar Erros</a>
     ·
-    <a href="https://github.com/renan-cassimiro/consulta_hidroweb/issues">Request Feature</a>
+    <a href="https://github.com/renan-cassimiro/consulta_hidroweb/issues">Requisitar Alterações</a>
   </p>
 </p>
 
