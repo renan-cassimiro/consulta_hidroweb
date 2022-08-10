@@ -128,6 +128,7 @@ server <- function(input, output, session) {
         if(!file.exists(arquivo_estacao) || Sys.Date() != data_arquivo_estacao){
             baseurl = "http://www.snirh.gov.br/hidroweb/rest/api/documento/convencionais?tipo=&documentos="
             
+            
             # tipo=3 arquivo excel  *.csv
             tipo = 3
             
@@ -135,23 +136,27 @@ server <- function(input, output, session) {
             baseurl = gsub("tipo=",paste0("tipo=",tipo),baseurl)
             baseurl_est = paste0(baseurl,estacao[1])
             
+            print(baseurl_est)
             # #Conexao
             r = POST(url = baseurl_est, body = list(cboTipoReg = "8"), encode = "form")
-            if (r$status_code == 405) {
+            print(r$status_code)
+            if (r$status_code == 200) {
+                print("teste")
                 cont = content(r, as = "text", encoding="ISO-8859-1")
                 download.file(baseurl_est, paste0(estacao[1], ".zip"), mode = "wb")
             }
+            
         }
         
         tryCatch({
-            unzip(paste0(estacao, ".zip"))
-            zip_estacao <- paste0("cotas_C_", estacao, ".zip")
+            unzip(paste0(estacao[1], ".zip"))
+            zip_estacao <- paste0("cotas_C_", estacao[1], ".zip")
             
             if(file.exists(zip_estacao)){
                 unzip(zip_estacao)
                 
                 tabela_original <<-
-                    read.csv2(paste0("cotas_C_", estacao, ".csv"), header=FALSE, sep = ";", skip = 14, skipNul=TRUE)
+                    read.csv2(paste0("cotas_C_", estacao[1], ".csv"), header=FALSE, sep = ";", skip = 14, skipNul=TRUE)
                 
                 updateTabsetPanel(session, "inTabset", selected = "panel2")
                 

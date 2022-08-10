@@ -5,9 +5,9 @@ account: renancb
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 5922210
-bundleId: 5724869
+bundleId: 6186394
 url: https://renancb.shinyapps.io/consulta_hidroweb/
-when: 1648175201.6537
-lastSyncTime: 1648175201.6537
+when: 1660104573.09686
+lastSyncTime: 1660104573.09686
 asMultiple: FALSE
 asStatic: FALSE
