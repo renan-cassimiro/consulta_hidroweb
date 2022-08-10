@@ -38,10 +38,10 @@
   <p align="center">
     An awesome README template to jumpstart your projects!
     <br />
-    <a href="https://github.com/renan-cassimiro/consulta_hidroweb"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/renan-cassimiro/consulta_hidroweb"><strong>Documentação »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/renan-cassimiro/consulta_hidroweb">Demostração</a>
+    <a href="https://renancb.shinyapps.io/consulta_hidroweb/">Demostração</a>
     ·
     <a href="https://github.com/renan-cassimiro/consulta_hidroweb/issues">Reportar Erros</a>
     ·
