@@ -1,0 +1,13 @@
+name: consulta_hidroweb
+title: consulta_hidroweb
+username: renancb
+account: renancb
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 5922210
+bundleId: 11867292
+url: https://renancb.shinyapps.io/consulta_hidroweb/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app_1.R|app_2.R|app_old.R
