@@ -275,32 +275,28 @@ processar_serie <- function(df_raw) {
 
   # Renomeia colunas detectadas e converte tipos
   df <- df_raw %>%
-    rename(data_hora = all_of(col_data), cota = all_of(col_cota)) %>%
+    rename(data = all_of(col_data), cota = all_of(col_cota)) %>%
     mutate(
       # Trunca o timestamp para 19 chars (yyyy-mm-dd HH:MM:SS) antes de converter,
       # pois a API pode retornar milissegundos ou sufixo de fuso horário
-      data_hora = as.POSIXct(substr(data_hora, 1, 19), format = "%Y-%m-%d %H:%M:%S"),
-      data      = as.Date(data_hora),                       # Extrai só a data para agregações
+      data      = as.Date(data),                       # Extrai só a data para agregações
       cota      = suppressWarnings(as.numeric(cota))        # API retorna cota como string
     ) %>%
-    filter(!is.na(data), !is.na(cota))  # Remove registros sem data ou cota válidos
-
-  # Série diária: agrega múltiplas leituras do mesmo dia pela média aritmética
-  serie_diaria <- df %>%
-    group_by(data) %>%
-    summarise(cota_media_diaria = mean(cota, na.rm = TRUE), .groups = "drop") %>%
-    arrange(data)
-
+    filter(!is.na(data), !is.na(cota)) %>% # Remove registros sem data ou cota válidos
+    distinct(data, .keep_all = TRUE) # Mantém a primeira ocorrência de cada data
+  
   # Série mensal: agrupa por mês (primeiro dia do mês via floor_date) e
   # calcula a média das médias diárias
-  serie_mensal <- serie_diaria %>%
+  serie_mensal <- df %>%
     mutate(mes = floor_date(data, "month")) %>%  # Arredonda para o 1º do mês
     group_by(mes) %>%
-    summarise(cota_media_mensal = mean(cota_media_diaria, na.rm = TRUE), .groups = "drop") %>%
+    summarise(cota_media_mensal = mean(cota, na.rm = TRUE), .groups = "drop") %>%
     rename(data = mes) %>%
     arrange(data)
-
-  list(diaria = serie_diaria, mensal = serie_mensal, bruta = df)
+ 
+  View(serie_mensal)
+  
+   list(mensal = serie_mensal, bruta = df)
 }
 
 # =========================================================================
@@ -362,12 +358,12 @@ ui <- navbarPage(
       br(),
       # Gráfico da série mensal — renderizado após o download completo
       withSpinner(dygraphOutput("dygraph_serie_historica")),
-      br(),
-      # Filtra e exibe a série diária para o intervalo selecionado acima
-      actionButton("gerar_diaria", "Ver Série Diária no Período Selecionado",
-                   icon = icon("chart-area"), class = "btn-info"),
-      br(), br(),
-      withSpinner(dygraphOutput("dygraph_serie_historica_diaria")),
+      # br(),
+      # # Filtra e exibe a série diária para o intervalo selecionado acima
+      # actionButton("gerar_diaria", "Ver Série Diária no Período Selecionado",
+      #              icon = icon("chart-area"), class = "btn-info"),
+      # br(), br(),
+      # withSpinner(dygraphOutput("dygraph_serie_historica_diaria")),
       br(),
       actionButton("preparar_download", "Preparar Download",
                    icon = icon("file-export"), class = "btn-success")
@@ -386,7 +382,7 @@ ui <- navbarPage(
       h1("Dados prontos para download"),
       br(),
       downloadButton("downloadSerieMensal",  "Série Mensal (.csv)",  icon = icon("download")),
-      downloadButton("downloadSerieDiaria",  "Série Diária (.csv)",  icon = icon("download")),
+      # downloadButton("downloadSerieDiaria",  "Série Diária (.csv)",  icon = icon("download")),
       downloadButton("downloadSerieCompleta","Série Bruta (.csv)",   icon = icon("download")),
       br(), br(),
       tags$div(id = "cite",
@@ -478,7 +474,7 @@ server <- function(input, output, session) {
 
       # --- 1. Autenticação ---
       token <- tryCatch(
-        obter_token("usuario", "senha"),
+        obter_token("40954711823", "jir5ys5s"),
         error = function(e) {
           shinyalert(title = "Erro de autenticação", text = e$message, type = "error")
           NULL
@@ -516,7 +512,7 @@ server <- function(input, output, session) {
 
       # Salva no estado reativo para uso pelos outros eventos (gráfico diário, downloads)
       rv$serie_mensal  <- series$mensal
-      rv$serie_diaria  <- series$diaria
+      # rv$serie_diaria  <- series$diaria
       rv$serie_bruta   <- series$bruta
       rv$nome_estacao  <- rede$Estacao[rede$Codigo == input$codEstacao]
       # Fallback para o código caso a estação não esteja no GeoJSON local
@@ -560,33 +556,33 @@ server <- function(input, output, session) {
   # intervalo de datas selecionado no dyRangeSelector do gráfico mensal.
   # Não realiza nenhuma nova chamada à API.
   # -----------------------------------------------------------------------
-  observeEvent(input$gerar_diaria, {
-    req(rv$serie_diaria)
-
-    # Lê o intervalo atualmente selecionado no gráfico mensal
-    data_ini <- as.Date(input$dygraph_serie_historica_date_window[[1]])
-    data_fim <- as.Date(input$dygraph_serie_historica_date_window[[2]])
-
-    diaria_filtrada <- rv$serie_diaria %>%
-      filter(data >= data_ini, data <= data_fim)
-
-    if (nrow(diaria_filtrada) == 0) {
-      shinyalert(title = "Sem dados", text = "Nenhum dado diário no período selecionado.", type = "info")
-      return()
-    }
-
-    output$dygraph_serie_historica_diaria <- renderDygraph({
-      ts_diaria <- xts::xts(diaria_filtrada$cota_media_diaria,
-                            order.by = diaria_filtrada$data)
-      names(ts_diaria) <- "Cota Média Diária (cm)"
-      dygraph(ts_diaria, main = "Série Diária de Cota") %>%
-        dyOptions(labelsUTC = TRUE, fillGraph = TRUE, fillAlpha = 0.15,
-                  drawGrid = FALSE, colors = "#D8AE5A") %>%
-        dyCrosshair(direction = "vertical") %>%
-        dyHighlight(highlightCircleSize = 4, hideOnMouseOut = FALSE) %>%
-        dyAxis("y", label = "Cota (cm)")
-    })
-  })
+  # observeEvent(input$gerar_diaria, {
+  #   req(rv$serie_diaria)
+  # 
+  #   # Lê o intervalo atualmente selecionado no gráfico mensal
+  #   data_ini <- as.Date(input$dygraph_serie_historica_date_window[[1]])
+  #   data_fim <- as.Date(input$dygraph_serie_historica_date_window[[2]])
+  # 
+  #   diaria_filtrada <- rv$serie_diaria %>%
+  #     filter(data >= data_ini, data <= data_fim)
+  # 
+  #   if (nrow(diaria_filtrada) == 0) {
+  #     shinyalert(title = "Sem dados", text = "Nenhum dado diário no período selecionado.", type = "info")
+  #     return()
+  #   }
+  # 
+  #   output$dygraph_serie_historica_diaria <- renderDygraph({
+  #     ts_diaria <- xts::xts(diaria_filtrada$cota_media_diaria,
+  #                           order.by = diaria_filtrada$data)
+  #     names(ts_diaria) <- "Cota Média Diária (cm)"
+  #     dygraph(ts_diaria, main = "Série Diária de Cota") %>%
+  #       dyOptions(labelsUTC = TRUE, fillGraph = TRUE, fillAlpha = 0.15,
+  #                 drawGrid = FALSE, colors = "#D8AE5A") %>%
+  #       dyCrosshair(direction = "vertical") %>%
+  #       dyHighlight(highlightCircleSize = 4, hideOnMouseOut = FALSE) %>%
+  #       dyAxis("y", label = "Cota (cm)")
+  #   })
+  # })
 
   # -----------------------------------------------------------------------
   # Evento: botão "Preparar Download"
@@ -601,7 +597,7 @@ server <- function(input, output, session) {
   #   - Bruta:   todas as colunas originais retornadas pela API, sem agregação
   # -----------------------------------------------------------------------
   observeEvent(input$preparar_download, {
-    req(rv$serie_mensal, rv$serie_diaria, rv$serie_bruta)
+    req(rv$serie_mensal, rv$serie_bruta)
 
     output$downloadSerieMensal <- downloadHandler(
       filename = function() paste0(input$codEstacao, "_mensal.csv"),
@@ -615,17 +611,6 @@ server <- function(input, output, session) {
       }
     )
 
-    output$downloadSerieDiaria <- downloadHandler(
-      filename = function() paste0(input$codEstacao, "_diaria.csv"),
-      content  = function(file) {
-        write.csv2(
-          transmute(rv$serie_diaria,
-                    data       = format(data, "%d/%m/%Y"),
-                    cota_media = round(cota_media_diaria, 2)),
-          file, row.names = FALSE
-        )
-      }
-    )
 
     # Série bruta: exporta os dados originais da API sem nenhuma agregação
     output$downloadSerieCompleta <- downloadHandler(
