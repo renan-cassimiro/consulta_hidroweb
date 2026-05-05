@@ -1,4 +1,4 @@
-# if (!require(devtools)) install.packages("devtools")
+# if (!require(devtools)) install.packages("devtools")re
 # library(devtools)
 # renv::install("dplyr@0.8.5")
 # install_github("hydroversebr/hydrobr", build_vignettes = FALSE)
@@ -18,108 +18,29 @@ library(tidyr)
 # Define o diretório para onde o script está salvo
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-# Função que aplica toda análise para UMA estação (com dados mensais)
-analisar_estacao <- function(df, station_code) {
-  
-  # Converter para médias mensais (versão sem aviso)
-  dt_mensal <- df %>%
-    mutate(
-      date = as.Date(date),
-      ano = year(date),
-      mes = month(date)
-    ) %>%
-    group_by(ano, mes) %>%
-    summarise(
-      stream_flow_m3_s = mean(stream_flow_m3_s, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(date = as.Date(paste(ano, mes, "01", sep = "-"))) %>%
-    arrange(date) %>%
-    filter(!is.na(stream_flow_m3_s))
-  
-  # Criar série temporal para STL (frequência = 12 para mensal)
-  ts_vazao <- ts(dt_mensal$stream_flow_m3_s, 
-                 frequency = 12, 
-                 start = c(min(dt_mensal$ano), min(dt_mensal$mes)))
-  
-  # STL decomposition
-  decomp <- stl(ts_vazao, s.window = "periodic")
-  
-  trend <- as.numeric(decomp$time.series[, "trend"])
-  residual <- as.numeric(decomp$time.series[, "remainder"])
-  
-  dt_mensal <- dt_mensal %>%
-    mutate(
-      trend = trend,
-      resid = residual
-    )
-  
-  # Teste de Mann-Kendall na tendência
-  mk <- MannKendall(dt_mensal$trend)
-  
-  # Teste com correção Yue-Pilon (para autocorrelação)
-  mk_mod <- zyp.trend.vector(dt_mensal$stream_flow_m3_s, method = "yuepilon")
-  
-  # Estimador de Sen
-  sen <- sens.slope(dt_mensal$stream_flow_m3_s)
-  
-  # Climatologia mensal para anomalias (agora usando os meses 1-12)
-  clim <- dt_mensal %>%
-    group_by(mes) %>%
-    summarise(
-      media = mean(stream_flow_m3_s, na.rm = TRUE),
-      sd = sd(stream_flow_m3_s, na.rm = TRUE),
-      .groups = "drop"
-    )
-  
-  # Juntar e calcular anomalias
-  dt_mensal <- dt_mensal %>%
-    left_join(clim, by = "mes") %>%
-    mutate(
-      z = (stream_flow_m3_s - media) / sd,
-      anomalia = ifelse(abs(z) > 2, "severa", ifelse(abs(z) > 1, "moderada", "normal")),
-      extremo = abs(z) > 3,
-      moderada = abs(z) > 2 & abs(z) <= 3
-    )
-  
-  # Teste de Pettitt (ponto de mudança)
-  pettitt <- pettitt.test(dt_mensal$stream_flow_m3_s)
-  
-  # Retornar resultados
-  list(
-    station_code  = station_code,
-    dados = dt_mensal,
-    decomposicao = decomp,
-    mann_kendall = mk,
-    yue_pilon = mk_mod,
-    sens_slope = sen,
-    pettitt = pettitt,
-    n_anomalias = sum(dt_mensal$anomalia == "severa"),
-    n_extremos = sum(dt_mensal$extremo)
-  )
-}
+source("functions/functions.R")
+
 ## Área de estudo
 area_estudo <- st_read("resources/hybas_lake_sa_lev03_v1c_bacia_amazonica.gpkg")
 
 inventario <- inventory(stationType = "flu", as_sf = T, aoi=area_estudo)
 
-# plot(area_estudo[,1], reset = FALSE)
-# plot(inventario[,1], add= TRUE)
+saveRDS(object=inventario , file="resources/inventario")
 
+###TODO Melhorar gráfico de apresentação
 ggplot() +
   geom_sf(data = inventario) +
   geom_sf(data = area_estudo, fill = NA, color = "red")+
   theme_classic()
 
 ### Baixar dados das estações
-print(Sys.time()) #[1] "2026-05-04 16:16:05 -03"
-dados_inventario <- stationsData(inventoryResult = inventario)
-print(Sys.time()) #[1] "2026-05-04 16:45:48 -03"
+####TODO retirara o filtro para baixar todos os dados
+dados_inventario <- stationsData(inventoryResult = inventario[seq(1,100,1),])
+saveRDS(object=dados_inventario , file="resources/dados_inventario")
 
 ### Organizar dados das estações
 dados_inventario_organizado <- organize(dados_inventario)
-print(Sys.time())
-
+saveRDS(object=dados_inventario_organizado , file="resources/dados_inventario_organizado")
 
 ### Organizar dados das estações
 dadosestacoes_selecionadas <- selectStations(organizeResult = dados_inventario_organizado,
@@ -130,10 +51,12 @@ dadosestacoes_selecionadas <- selectStations(organizeResult = dados_inventario_o
                                              iniYear = 2010,
                                              finYear = 2025,
                                              consistedOnly = F)
-print(Sys.time())
+saveRDS(object=dadosestacoes_selecionadas , file="resources/dadosestacoes_selecionadas")
+
+# #usando dados já baixados para teste
+# dadosestacoes_selecionadas$series <- readRDS('dados_inventario')
 
 resultados <- map2(dadosestacoes_selecionadas$series, names(dadosestacoes_selecionadas$series), analisar_estacao)
-names(resultados) <- names(dadosestacoes_selecionadas$series)
 
 # Extrair tabela resumo
 tabela_resumo <- map_dfr(resultados, function(x) {
@@ -246,4 +169,12 @@ ggplot() +
   geom_sf(data = area_estudo, fill = NA, color = "red")+
   theme_classic()
 
+### TODO
+# Cruzar os códigos das estações com a camada que tem o nome dos rios, 
+# bacia, area de captação, entre outros para filtrar o conteúdo antes de chamar
+# as funções do hydrobr e para avançar em análises geográfica.
 
+#Aplicar as análises temporais disponíveis no pacote hydrobr
+
+## Futuras aplicações, permitir que sejam selecionadas diversas estações para se 
+## via o site do shyni, permitindo também a seleção de bacias hidrográficas e rios.
