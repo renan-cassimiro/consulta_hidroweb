@@ -25,8 +25,11 @@ source("functions/functions.R")
 
 ## Área de estudo
 area_estudo <- st_read("resources/hybas_lake_sa_lev03_v1c_bacia_amazonica.gpkg")
+estacoes_filtradas <- st_read("resources/estacoes_fluviometricas_filtradas_tamanho_bacia_vazao.gpkg")
 
 inventario <- inventory(stationType = "flu", as_sf = T, aoi=area_estudo)
+#TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
+inventario <- inventario %>% filter(inventario$station_code %in% estacoes_filtradas$CodigoEstacao)
 
 saveRDS(object=inventario , file="resources/inventario")
 
@@ -38,12 +41,23 @@ ggplot() +
 
 ### Baixar dados das estações
 ####TODO retirara o filtro para baixar todos os dados
-dados_inventario <- stationsData(inventoryResult = inventario[seq(1,100,1),])
+dados_inventario <- stationsData(inventoryResult = inventario)
 saveRDS(object=dados_inventario , file="resources/dados_inventario")
+dados_inventario <- readRDS(file="resources/dados_inventario")
+
+#TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
+dados_inventario <- dados_inventario[estacoes_filtradas$CodigoEstacao]
 
 ### Organizar dados das estações
 dados_inventario_organizado <- organize(dados_inventario)
+
+#TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
+dados_inventario_organizado <- dados_inventario_organizado[estacoes_filtradas$CodigoEstacao]
+
+
 saveRDS(object=dados_inventario_organizado , file="resources/dados_inventario_organizado")
+
+
 
 ### Organizar dados das estações
 dadosestacoes_selecionadas <- selectStations(organizeResult = dados_inventario_organizado,
@@ -54,7 +68,12 @@ dadosestacoes_selecionadas <- selectStations(organizeResult = dados_inventario_o
                                              iniYear = 2010,
                                              finYear = 2025,
                                              consistedOnly = F)
+
+ggsave("relatorio/disponibilidade_estacoes.png", width = 12, height = 5, dpi = 150)
+
 saveRDS(object=dadosestacoes_selecionadas , file="resources/dadosestacoes_selecionadas")
+
+
 
 # #usando dados já baixados para teste
 # dadosestacoes_selecionadas$series <- readRDS('dados_inventario')
@@ -79,17 +98,12 @@ tabela_resumo <- map_dfr(resultados, function(x) {
   )
 })
 
-
 # Empilhar todos os dados para gráfico
 dados_empilhados <- map_dfr(resultados, function(x) {
   x$dados |> mutate(station_code = x$station_code)
 })
 
-
 gerar_relatorio(tabela_resumo, dados_empilhados)
-
-
-
 
 # =============================================================================
 # ANÁLISE DESCRITIVA E MAPAS TEMÁTICOS — ESTAÇÕES ANA
@@ -266,7 +280,6 @@ painel_mapas + plot_annotation(
 
 ggsave("mapas_tematicos.png", width = 8, height = 16, dpi = 150)
 # Para lado a lado: width = 18, height = 7
-
 
 
 
