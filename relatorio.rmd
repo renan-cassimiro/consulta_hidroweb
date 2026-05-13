@@ -3,6 +3,9 @@ title: "Relatório Hidrológico Básico"
 author: "Renan Cassimiro Brito"
 date: "2026-05-06"
 output: pdf_document
+params:
+  graficos: NULL
+  
 header-includes:
   - \usepackage{float}
   - \usepackage{placeins}
@@ -31,7 +34,7 @@ Este relatório apresenta uma análise de dados básica acerca da disponibilidad
 ## Gráfico 1: Disponibilidade de dados de vazão entre 2010 e 2025
 
 ```{r grafico1, fig.cap="Disponibilidade de dados de vazão entre 2010 e 2025", fig.width=10, fig.height=6, fig.pos='H'}
-dadosestacoes_selecionadas$plot
+params$graficos$disponibilidade
 ```
 
 \FloatBarrier
@@ -41,7 +44,7 @@ dadosestacoes_selecionadas$plot
 ## Gráfico 2: Tendência da vazão na série histórica por estação
 
 ```{r grafico2, fig.cap="Tendência da vazão por estação", fig.width=12, fig.height=6, fig.pos='H'}
-graficos$tendencias_estacoes
+params$graficos$tendencias_estacoes
 ```
 
 \FloatBarrier
@@ -51,7 +54,7 @@ graficos$tendencias_estacoes
 ## Gráfico 3: Série histórica das estações
 
 ```{r grafico3, fig.cap="Séries temporais com tendências (todas as estações)", fig.width=12, fig.height=10, fig.pos='H'}
-graficos$tendencias_classificadas
+params$graficos$tendencias_classificadas
 ```
 
 \FloatBarrier
@@ -62,7 +65,7 @@ graficos$tendencias_classificadas
 ## Gráfico 4: Contagem de estações segundo tendência
 
 ```{r grafico4, fig.cap="Contagem de estações por classe de tendência", fig.width=8, fig.height=6, fig.pos='H'}
-p1
+params$graficos$contagens_tendencia
 ```
 
 \FloatBarrier
@@ -72,7 +75,7 @@ p1
 ## Gráfico 5: Mapa de direção e força da tendência por estação
 
 ```{r grafico5, fig.cap="Mapa de direção e magnitude da tendência", fig.width=10, fig.height=7, fig.pos='H'}
-m1
+params$graficos$mapa_tendencia_hidrologica
 ```
 
 \FloatBarrier
