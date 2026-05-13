@@ -84,7 +84,7 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
   
   print(tabela_resumo)
   # Exportar resultados
-  write.csv(tabela_resumo, "relatorio/resumo_tendencias_mensal.csv", row.names = FALSE)
+  write.csv(tabela_resumo, "relatorio_dourada/resumo_tendencias_mensal.csv", row.names = FALSE)
   # saveRDS(resultados, "resultados_analises_mensal.rds")
   
   # Adicionar anotação com o valor da tendência nas barras
@@ -92,7 +92,7 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
                                 ifelse(tabela_resumo$tendencia == "Positiva", " ▲", 
                                        ifelse(tabela_resumo$tendencia == "Negativa", " ▼", " ○")))
   
-  ggplot(tabela_resumo, aes(x = reorder(station_code, slope_sen), 
+  tendencias_estacoes <- ggplot(tabela_resumo, aes(x = reorder(station_code, slope_sen), 
                             y = slope_sen, 
                             fill = tendencia)) +
     geom_bar(stat = "identity") +
@@ -111,7 +111,7 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
     theme_minimal()
   
   # Salvar gráfico
-  ggsave("relatorio/tendencias_estacoes.png", width = 10, height = 8, dpi = 300)
+  # ggsave("relatorio_dourada/tendencias_estacoes.png", width = 10, height = 8, dpi = 300)
   
   # Preparar dados com classificação de tendência
   dados_com_classificacao <- dados_empilhados %>%
@@ -130,10 +130,10 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
   
   ### Esse tá sendo o melhor
   # Gráfico com cores diferentes para cada classificação
-  ggplot(dados_com_classificacao, aes(x = date, y = stream_flow_m3_s)) +
+  tendencias_classificadas <- ggplot(dados_com_classificacao, aes(x = date, y = stream_flow_m3_s)) +
     geom_line(alpha = 0.3, size = 0.3, color = "gray50") +
     geom_line(aes(y = trend, color = cor_tendencia), size = 1.2) +
-    facet_wrap(~titulo_facet, scales = "free_y", ncol = 2) +
+    facet_wrap(~titulo_facet, scales = "free_y", ncol = 7) +
     scale_color_manual(
       values = c(
         "Negativa" = "#D32F2F",      # vermelho
@@ -150,7 +150,7 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
     ) +
     theme_minimal() +
     theme(
-      axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 6),
       axis.text.y = element_text(size = 7),
       strip.text = element_text(size = 8, face = "bold"),
       legend.position = "bottom",
@@ -159,16 +159,27 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
     )
   
   # Salvar
-  ggsave("relatorio/tendencias_classificadas.png", width = 16, height = 12, dpi = 300)
+  # ggsave("relatorio_dourada/tendencias_classificadas.png", width = 20, height = 20, dpi = 300)
   
   ### Plotar estação por tendência
   dados_com_classificacao_localizacao <- st_as_sf(
     inner_join(dados_com_classificacao, inventario[,c('station_code','lat','long', 'geometry')], by='station_code'))
   
-  ggplot() +
-    geom_sf(data = dados_com_classificacao_localizacao, aes(color=tendencia), size=2) +
-    geom_sf(data = area_estudo, fill = NA, color = "red")+
+  rios <- st_read("resources/ne_10m_rivers_lake_centerlines_amazonia.gpkg")
+  
+  mapa_tendencias_classificadas <- ggplot() +
+    geom_sf(data = area_estudo, color = "black", linewidth=1)+
+    geom_sf(data = rios, color="blue", linewidth=0.5)+
+    geom_sf(data = dados_com_classificacao_localizacao, aes(color=tendencia), size=5) +
     theme_minimal() +
+    scale_color_manual(
+      values = c(
+        "Negativa" = "#D32F2F",      # vermelho
+        "Positiva" = "#1976D2",      # azul
+        "Não significativa" = "#757575"  # cinza
+      ),
+      name = "Tendência"
+    ) +
     theme(
       axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
       axis.text.y = element_text(size = 7),
@@ -178,7 +189,13 @@ gerar_relatorio <- function(tabela_resumo, dados_empilhados){
       plot.subtitle = element_text(size = 10)
     )
   
-  ggsave("relatorio/mapa_tendencias_classificadas.png", width = 16, height = 12, dpi = 300)
+  ggsave("relatorio_dourada/mapa_tendencias_classificadas.png", width = 16, height = 12, dpi = 300)
   
+  # Retornar resultados
+  list(
+    tendencias_estacoes  = tendencias_estacoes,
+    tendencias_classificadas = tendencias_classificadas,
+    mapa_tendencias_classificadas = mapa_tendencias_classificadas
+  )
   
 }

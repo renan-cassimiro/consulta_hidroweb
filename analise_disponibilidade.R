@@ -25,16 +25,18 @@ source("functions/functions.R")
 
 ## Área de estudo
 area_estudo <- st_read("resources/hybas_lake_sa_lev03_v1c_bacia_amazonica.gpkg")
-estacoes_filtradas <- st_read("resources/estacoes_fluviometricas_filtradas_tamanho_bacia_vazao.gpkg")
+# estacoes_filtradas <- st_read("resources/estacoes_fluviometricas_filtradas_tamanho_bacia_vazao.gpkg")
+# estacoes_filtradas <- st_read("resources/estacoes_fluviometricas_selecionadas_pelo_nome.gpkg")
+estacoes_filtradas <- st_read("resources/dourada_geoft_estacao_hidrometeorologica_filtradas.gpkg")
 
 inventario <- inventory(stationType = "flu", as_sf = T, aoi=area_estudo)
 #TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
 inventario <- inventario %>% filter(inventario$station_code %in% estacoes_filtradas$CodigoEstacao)
 
-saveRDS(object=inventario , file="resources/inventario")
+saveRDS(object=inventario , file="resources/inventario_dourada")
 
 ###TODO Melhorar gráfico de apresentação
-ggplot() +
+mapa_inicial <- ggplot() +
   geom_sf(data = inventario) +
   geom_sf(data = area_estudo, fill = NA, color = "red")+
   theme_classic()
@@ -42,42 +44,37 @@ ggplot() +
 ### Baixar dados das estações
 ####TODO retirara o filtro para baixar todos os dados
 dados_inventario <- stationsData(inventoryResult = inventario)
-saveRDS(object=dados_inventario , file="resources/dados_inventario")
-dados_inventario <- readRDS(file="resources/dados_inventario")
+saveRDS(object=dados_inventario , file="resources/dados_inventario_dourada")
+# dados_inventario <- readRDS(file="resources/dados_inventario")
 
-#TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
-dados_inventario <- dados_inventario[estacoes_filtradas$CodigoEstacao]
 
 ### Organizar dados das estações
 dados_inventario_organizado <- organize(dados_inventario)
 
 #TODO aplicar filtro antes de baixar os dados, este abaixo é só para teste offline
-dados_inventario_organizado <- dados_inventario_organizado[estacoes_filtradas$CodigoEstacao]
+# dados_inventario_organizado <- dados_inventario_organizado[estacoes_filtradas$CodigoEstacao]
 
 
-saveRDS(object=dados_inventario_organizado , file="resources/dados_inventario_organizado")
-
+saveRDS(object=dados_inventario_organizado , file="resources/dados_inventario_organizado_dourada")
 
 
 ### Organizar dados das estações
 dadosestacoes_selecionadas <- selectStations(organizeResult = dados_inventario_organizado,
                                              mode = "yearly",
-                                             maxMissing = 5,
-                                             minYears = 10,
+                                             # maxMissing = 5,
+                                             minYears = 2,
                                              month = 1,
-                                             iniYear = 2010,
+                                             iniYear = 1900,
                                              finYear = 2025,
                                              consistedOnly = F)
 
-ggsave("relatorio/disponibilidade_estacoes.png", width = 12, height = 5, dpi = 150)
+ggsave("relatorio_dourada/disponibilidade_estacoes.png", width = 6, height = 12, dpi = 330)
 
 saveRDS(object=dadosestacoes_selecionadas , file="resources/dadosestacoes_selecionadas")
 
-
-
 # #usando dados já baixados para teste
 # dadosestacoes_selecionadas$series <- readRDS('dados_inventario')
-dadosestacoes_selecionadas <- readRDS('resources/dadosestacoes_selecionadas')
+# dadosestacoes_selecionadas <- readRDS('resources/dadosestacoes_selecionadas')
 
 resultados <- map2(dadosestacoes_selecionadas$series, names(dadosestacoes_selecionadas$series), analisar_estacao)
 
@@ -85,11 +82,11 @@ resultados <- map2(dadosestacoes_selecionadas$series, names(dadosestacoes_seleci
 tabela_resumo <- map_dfr(resultados, function(x) {
   tibble(
     station_code = x$station_code,
-    tau_mk = x$mann_kendall$tau,
-    p_valor_mk = x$mann_kendall$sl,
-    slope_sen = as.numeric(x$sens_slope$estimates),
-    p_valor_sen = x$sens_slope$p.value,
-    ponto_mudanca = x$pettitt$estimate,
+    tau_mk = round(x$mann_kendall$tau, 2),
+    p_valor_mk = round(x$mann_kendall$sl, 2),
+    slope_sen = round(as.numeric(x$sens_slope$estimates), 2),
+    p_valor_sen = round(x$sens_slope$p.value, 2),
+    ponto_mudanca = round(x$pettitt$estimate, 2),
     p_valor_pettitt = x$pettitt$p.value,
     n_anomalias = x$n_anomalias,
     n_extremos = x$n_extremos,
@@ -103,7 +100,7 @@ dados_empilhados <- map_dfr(resultados, function(x) {
   x$dados |> mutate(station_code = x$station_code)
 })
 
-gerar_relatorio(tabela_resumo, dados_empilhados)
+graficos <- gerar_relatorio(tabela_resumo, dados_empilhados)
 
 # =============================================================================
 # ANÁLISE DESCRITIVA E MAPAS TEMÁTICOS — ESTAÇÕES ANA
@@ -145,7 +142,10 @@ p1 <- ggplot(contagem_tend, aes(x = tendencia, y = n, fill = tendencia)) +
   labs(title = "Frequência de tendência",
        x = NULL, y = "Nº de estações") +
   theme_bw(base_size = 11) +
-  theme(panel.grid.major.x = element_blank())
+  theme(
+    panel.grid.major.x = element_blank(),
+    base_size = 14
+    )
 
 # --- 1.2 n_anomalias por tendência (boxplot + jitter) ------------------------
 
@@ -184,7 +184,7 @@ painel_contagens + plot_annotation(
   theme    = theme(plot.title = element_text(size = 13, face = "bold"))
 )
 
-ggsave("relatorio/contagens_tendencia.png", width = 12, height = 5, dpi = 150)
+ggsave("relatorio_dourada/contagens_tendencia.png", width = 12, height = 5, dpi = 150)
 
 
 # =============================================================================
@@ -201,22 +201,25 @@ estacoes_map <- inventario |>
 # brasil <- read_country(year = 2020, simplified = TRUE)
 
 # Tema limpo para mapas
-tema_mapa <- theme_void(base_size = 11) +
+tema_mapa <- theme_void(base_size = 14) +
   theme(
-    plot.title       = element_text(face = "bold", size = 11),
-    plot.subtitle    = element_text(size = 9, color = "gray40"),
+    plot.title       = element_text(face = "bold", size = 16),
+    plot.subtitle    = element_text(size = 12, color = "gray40"),
     legend.position  = "right",
-    legend.key.width = unit(0.4, "cm")
+    legend.key.width = unit(1, "cm")
   )
 
 # --- 2.1 Cor = tendência | Tamanho = |tau_mk| --------------------------------
+rios <- st_read("resources/ne_10m_rivers_lake_centerlines_amazonia.gpkg")
+amacro <- st_read("resources/AMACRO/AMACRO.shp")
 
 m1 <- ggplot() +
   # geom_sf(data = brasil, fill = "gray96", color = "gray70", linewidth = 0.3) +
+  geom_sf(data = amacro, fill = "pink", linewidth=0.8)+
+  geom_sf(data = rios, color="blue", linewidth=0.5)+
+  geom_sf(data = area_estudo, color = "black", linewidth=1)+
   geom_sf(data = estacoes_map,
-          aes(color = tendencia, size = abs_tau),
-          alpha = 0.85) +
-  geom_sf(data = area_estudo, fill = NA, color = "red")+
+          aes(color = tendencia, size = abs_tau)) +
   scale_color_manual(values = CORES_TENDENCIA, name = "Tendência") +
   scale_size_continuous(
     name   = "|τ Mann-Kendall|",
@@ -278,10 +281,10 @@ painel_mapas + plot_annotation(
   theme = theme(plot.title = element_text(size = 13, face = "bold"))
 )
 
-ggsave("mapas_tematicos.png", width = 8, height = 16, dpi = 150)
+ggsave("relatorio_dourada/mapas_tematicos.png", width = 8, height = 16, dpi = 150)
 # Para lado a lado: width = 18, height = 7
 
-
+rmarkdown::render("relatorio_dourada/relatorio_dourada.Rmd", output_format = "pdf_document")
 
 ### TODO
 # Cruzar os códigos das estações com a camada que tem o nome dos rios, 
