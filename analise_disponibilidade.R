@@ -48,6 +48,7 @@
 # library(devtools)
 # install_github("hydroversebr/hydrobr", build_vignettes = FALSE)
 
+library(arrow)
 library(fs)
 library(here)
 library(hydrobr)
@@ -55,8 +56,10 @@ library(Kendall)
 library(lubridate)
 library(openxlsx)
 library(patchwork)
+library(purrr)
 library(scales)
 library(sf)
+library(sfarrow)
 library(tidyverse)
 library(trend)
 library(zyp)
@@ -68,7 +71,7 @@ source(here("functions/functions.R"))
 # Diretórios do projeto (todos relativos à raiz via {here})
 # -----------------------------------------------------------------------------
 RESOURCES_DIR <- here("resources")
-OUTPUT_DIR    <- here("output", "refactor_test")
+OUTPUT_DIR    <- here("output", "xingu_river")
 REPORT_DIR    <- path(OUTPUT_DIR, "report")
 IMAGE_DIR     <- path(OUTPUT_DIR, "images")
 DATA_DIR      <- path(OUTPUT_DIR, "data")
@@ -76,13 +79,13 @@ DATA_DIR      <- path(OUTPUT_DIR, "data")
 # -----------------------------------------------------------------------------
 # 1. ÁREA DE ESTUDO E ESTAÇÕES
 # -----------------------------------------------------------------------------
-
 area_estudo <- st_read(path(RESOURCES_DIR,
-                            "hybas_lake_sa_lev03_v1c_bacia_amazonica.gpkg"))
+                            "xingu_river_study_area_bounding_box.gpkg"))
 
 # Defina estacoes_filtradas <- NULL para usar todas as estações do inventário
-estacoes_filtradas <- st_read(path(RESOURCES_DIR,
-                                   "dourada_geoft_estacao_hidrometeorologica_filtradas.gpkg"))
+#estacoes_filtradas <- st_read(path(RESOURCES_DIR,
+#                                   "dourada_geoft_estacao_hidrometeorologica_filtradas.gpkg"))
+estacoes_filtradas <- NULL
 
 # -----------------------------------------------------------------------------
 # 2. INVENTÁRIO DE ESTAÇÕES FLUVIOMÉTRICAS
@@ -92,13 +95,15 @@ estacoes_filtradas <- st_read(path(RESOURCES_DIR,
 # dentro do polígono da área de estudo
 inventario <- inventory(stationType = "flu", as_sf = TRUE, aoi = area_estudo)
 
+
 # Aplica filtro por estações pré-selecionadas (quando fornecidas)
 if (!is.null(estacoes_filtradas)) {
   inventario <- inventario |>
     filter(station_code %in% estacoes_filtradas$CodigoEstacao)
 }
-
-saveRDS(inventario, file = path(DATA_DIR, "inventario"))
+ 
+# Para gravar dados geométricos
+st_write_parquet(inventario, path(DATA_DIR, "inventario.parquet"), compression = "zstd")
 
 # Mapa rápido de conferência do inventário
 ggplot() +
@@ -111,14 +116,18 @@ ggplot() +
 # -----------------------------------------------------------------------------
 
 # Baixa as séries históricas de todas as estações do inventário
-dados_inventario <- stationsData(inventoryResult = inventario)
-saveRDS(dados_inventario, file = path(DATA_DIR, "dados_inventario"))
+dados_inventario <- stationsData(inventoryResult = inventario, waterLevel = FALSE)
+walk2(dados_inventario, 
+      names(dados_inventario), 
+      ~ write_parquet(.x, path( DATA_DIR, "xingu_river_stations_discharge", paste0(.y, ".parquet")), compression = "zstd"))
 
 # Organiza os dados no formato padrão do {hydrobr}
 dados_inventario_organizado <- organize(dados_inventario)
-saveRDS(dados_inventario_organizado, file = path(DATA_DIR, "dados_inventario_organizado"))
+walk2(dados_inventario_organizado, 
+      names(dados_inventario_organizado), 
+      ~ write_parquet(.x, path( DATA_DIR, "xingu_river_stations_discharge_organized", paste0(.y, ".parquet")), compression = "zstd"))
 
-# -----------------------------------------------------------------------------
+# ----e-------------------------------------------------------------------------
 # 4. SELEÇÃO DE ESTAÇÕES POR CRITÉRIOS DE QUALIDADE
 # -----------------------------------------------------------------------------
 # Critérios aplicados:
@@ -132,16 +141,14 @@ saveRDS(dados_inventario_organizado, file = path(DATA_DIR, "dados_inventario_org
 
 dadosestacoes_selecionadas <- selectStations(
   organizeResult = dados_inventario_organizado,
-  mode           = "yearly",
-  maxMissing     = 5,
-  minYears       = 10,
-  month          = 1,
-  iniYear        = 1900,
-  finYear        = 2025,
-  consistedOnly  = FALSE
-)
-
-saveRDS(dadosestacoes_selecionadas, file = path(DATA_DIR, "dadosestacoes_selecionadas"))
+    mode           = "yearly",
+    maxMissing     = 100,
+    minYears       = 1,
+    month          = 1,
+    iniYear        = 1900,
+    finYear        = 2026,
+    consistedOnly  = FALSE
+  )
 
 # -----------------------------------------------------------------------------
 # 5. ANÁLISE ESTATÍSTICA POR ESTAÇÃO

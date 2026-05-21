@@ -130,8 +130,6 @@ Classificação da tendência: significativa quando `p < 0.05` (Mann-Kendall), d
 ## TODOs
 
 - [ ] Melhorar mapa inicial de apresentação (incluir camada de rios e estados)
-- [ ] Aplicar filtro de estações antes do download (atualmente feito após)
 - [ ] Cruzar estações com camada de rios/bacias para enriquecer atributos
 - [ ] Aplicar análises temporais adicionais disponíveis no `{hydrobr}`
-- [ ] Eliminar dependência de variáveis globais (`RESOURCES_DIR`, `area_estudo`) dentro de `gerar_graficos()`
 - [ ] Interface Shiny para seleção interativa de estações e bacias hidrográficas
