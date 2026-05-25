@@ -42,3 +42,5 @@ vignettes/*.pdf
 backup/
 gis/
 output/
+.tif
+.tiff

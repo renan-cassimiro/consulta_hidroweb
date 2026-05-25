@@ -52,6 +52,7 @@ library(arrow)
 library(fs)
 library(here)
 library(hydrobr)
+library(kableExtra)
 library(Kendall)
 library(lubridate)
 library(openxlsx)
@@ -71,7 +72,7 @@ source(here("functions/functions.R"))
 # Diretórios do projeto (todos relativos à raiz via {here})
 # -----------------------------------------------------------------------------
 RESOURCES_DIR <- here("resources")
-OUTPUT_DIR    <- here("output", "xingu_river")
+OUTPUT_DIR    <- here("output", "iriri_river")
 REPORT_DIR    <- path(OUTPUT_DIR, "report")
 IMAGE_DIR     <- path(OUTPUT_DIR, "images")
 DATA_DIR      <- path(OUTPUT_DIR, "data")
@@ -79,8 +80,7 @@ DATA_DIR      <- path(OUTPUT_DIR, "data")
 # -----------------------------------------------------------------------------
 # 1. ÁREA DE ESTUDO E ESTAÇÕES
 # -----------------------------------------------------------------------------
-area_estudo <- st_read(path(RESOURCES_DIR,
-                            "xingu_river_study_area_bounding_box.gpkg"))
+area_estudo <- st_read(path(RESOURCES_DIR, "hybas_lake_sa_lev05_v1c_rio_iriri.gpkg"))
 
 # Defina estacoes_filtradas <- NULL para usar todas as estações do inventário
 #estacoes_filtradas <- st_read(path(RESOURCES_DIR,
@@ -143,7 +143,7 @@ dadosestacoes_selecionadas <- selectStations(
   organizeResult = dados_inventario_organizado,
     mode           = "yearly",
     maxMissing     = 100,
-    minYears       = 1,
+    minYears       = 5,
     month          = 1,
     iniYear        = 1900,
     finYear        = 2026,
@@ -188,9 +188,7 @@ tabela_resumo <- map_dfr(resultados, function(x) {
 })
 
 print(tabela_resumo)
-write.csv(tabela_resumo,
-          path(OUTPUT_DIR, "resumo_tendencias_mensal.csv"),
-          row.names = FALSE)
+write_parquet(tabela_resumo, path(OUTPUT_DIR, "resumo_tendencias_mensal.parquet"))
 
 # -----------------------------------------------------------------------------
 # 7. DADOS EMPILHADOS PARA GRÁFICOS DE SÉRIE TEMPORAL
@@ -237,3 +235,47 @@ rmarkdown::render(
   params        = list(graficos = graficos),
   envir         = new.env(parent = globalenv())
 )
+
+#TODO - Fazendo análise hidrológica integrada
+#=============================================================================
+  # ETAPA 1 — BASE HIDROLÓGICA ESPACIAL
+  # =============================================================================
+#
+# Autor:   Renan Cassimiro Brito
+# Data:    2026-05-21
+#
+# Descrição:
+#   Cria a camada analítica principal do projeto: um objeto sf com geometria
+#   de ponto por estação, contendo todos os atributos estatísticos da análise
+#   de tendência e classificação hidrológica mínima de conectividade.
+#
+#   Essa camada é a unidade espacial base para todas as etapas seguintes
+#   (Moran, sazonalidade, clima, fatores externos).
+#
+# Inputs:
+#   inventario      — objeto sf já carregado no ambiente (main.R)
+#   tabela_resumo   — data.frame com métricas de tendência (main.R)
+#   resources/ne_10m_rivers_lake_centerlines_amazonia.gpkg — hidrografia
+#
+# Outputs:
+#   data/estacoes_analise.gpkg     — camada analítica final (GeoPackage)
+#   data/estacoes_analise.parquet  — cópia em parquet para análises tabulares
+#
+# Dependências: sf, sfarrow, dplyr, here, fs (carregadas no main.R)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. CAMADA ANALÍTICA — junção espacial + atributos de tendência
+# -----------------------------------------------------------------------------
+analysed_stations  <- inventario |>
+  # Mantém apenas colunas relevantes do inventário
+  select(station_code, name, area_km2, lat, long, geometry) |>
+  # Junta todos atributos da análise de tendência (left_join pode descartar a classe em alguns casos)
+  left_join(tabela_resumo, by="station_code") |> 
+  st_as_sf()
+
+# Verificação rápida
+glimpse(analysed_stations)
+cat("\nEstações na camada analítica:", nrow(analysed_stations), "\n")
+cat("CRS:", st_crs(analysed_stations)$input, "\n")
+st_write_parquet(analysed_stations, path(DATA_DIR, "analysed_stations.parquet"))
