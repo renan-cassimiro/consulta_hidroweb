@@ -132,18 +132,11 @@ message("\n=== 2. Direção e acumulação de fluxo ===")
 
 # D8 pointer (direção de fluxo)
 message("  Calculando direção de fluxo D8...")
-wbt_d8_pointer(
-  dem    = DEM_FILL,
-  output = D8_POINTER
-)
+wbt_d8_pointer(dem    = DEM_FILL, output = D8_POINTER)
 
 # Acumulação de fluxo (número de células a montante)
 message("  Calculando acumulação de fluxo...")
-wbt_d8_flow_accumulation(
-  input  = DEM_FILL,
-  output = D8_ACCUM,
-  out_type = "cells"
-)
+wbt_d8_flow_accumulation(input  = DEM_FILL, output = D8_ACCUM, out_type = "cells")
 
 # -----------------------------------------------------------------------------
 # 3. EXTRAÇÃO DA REDE DE DRENAGEM
@@ -155,13 +148,8 @@ message("\n=== 3. Extração da rede de drenagem ===")
 # Ajuste conforme necessário para a densidade de drenagem da região
 LIMIAR_ACUMULACAO <- 5000
 
-message("  Limiar de acumulação: ", LIMIAR_ACUMULACAO, " células (~",
-        round(LIMIAR_ACUMULACAO * 30^2 / 1e6, 2), " km²)")
-wbt_extract_streams(
-  flow_accum = D8_ACCUM,
-  output     = STREAMS_RAST,
-  threshold  = LIMIAR_ACUMULACAO
-)
+message("  Limiar de acumulação: ", LIMIAR_ACUMULACAO, " células (~", round(LIMIAR_ACUMULACAO * 30^2 / 1e6, 2), " km²)")
+wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LIMIAR_ACUMULACAO)
 
 #Deixar a vetorização para depois
 # Vetorizar a rede de drenagem
@@ -199,9 +187,8 @@ estacoes_dem <- st_transform(analysed_stations, crs(rast(D8_ACCUM)))
 streams_rast <- rast(STREAMS_RAST)
 accum_rast <- rast(D8_ACCUM)
 
-
 # Distância máxima de busca (m)
-SNAP_DIST <- 3000
+SNAP_DIST <- 500
 
 # -----------------------------------------------------------------------------
 # Aplicar snap
@@ -238,9 +225,7 @@ estacoes_snap <- bind_rows(snapped_list)
 # -----------------------------------------------------------------------------
 # Controle de qualidade
 # -----------------------------------------------------------------------------
-
 message("Snap concluído.")
-
 message("Distância média: ", round(mean(estacoes_snap$dist_snap_m, na.rm = TRUE), 1),  " m")
 message("Distância máxima: ",  round(max(estacoes_snap$dist_snap_m, na.rm = TRUE), 1),  " m")
 
@@ -263,61 +248,61 @@ st_write(estacoes_snap, SNAP_PATH,  delete_dsn = TRUE, quiet = TRUE)
 message("\n=== 5. Delimitação das bacias de contribuição ===")
 message("  Processando ", nrow(estacoes_snap), " estações — pode demorar alguns minutos...")
 
-# Delimita watershed para cada estação individualmente
-# TODO Melhorar processo, ele tá rodando a mesma coisa um onte de vez
-# Também não parece estar trazendo a delimitação certa da bacia
-bacias_lista <- vector("list", nrow(estacoes_snap))
+BIG_STREAMS_RAST <- path(DEM_DIR, "rede_drenagem_grande.tif")
+STREAM_LINKS <- path(DEM_DIR, "stream_links.tif")
+SUBBASINS <- path(DEM_DIR, "subbacias.tif")
+SUBBASINS_VEC <- path(DEM_DIR, "subbacias.gpkg")
 
-for (i in seq_len(nrow(estacoes_snap))) {
-  cod <- estacoes_snap$station_code[i]
-  message("  [", i, "/", nrow(estacoes_snap), "] ", cod)
-  
-  ponto_tmp  <- path(DEM_DIR, paste0("pour_", cod, ".shp"))
-  bacia_tmp  <- path(DEM_DIR, paste0("bacia_", cod, ".tif"))
-  
-  # Exporta ponto individual
-  st_write(estacoes_snap[i, ], ponto_tmp, delete_dsn = TRUE, quiet = TRUE)
-  
-  # Delimita watershed
-  wbt_watershed(
-    d8_pntr   = D8_POINTER,
-    pour_pts  = ponto_tmp,
-    output    = bacia_tmp
-  )
-  
-  # Vetoriza e calcula área
-  bacia_rast <- rast(bacia_tmp)
-  bacia_vect <- as.polygons(bacia_rast == 1) |>
-    st_as_sf() |>
-    st_set_crs(crs(bacia_rast)) |>
-    # filter(bacia_rast == 1) |>   # mantém só a bacia (valor 1)
-    summarise(geometry = st_union(geometry)) |>
-    mutate(
-      station_code  = cod,
-      area_bacia_km2 = as.numeric(st_area(geometry)) / 1e6
-    )
-  
-  bacias_lista[[i]] <- bacia_vect
-  
-  # Limpeza dos arquivos temporários individuais
-  # file_delete(c(ponto_tmp,
-  #               path(DEM_DIR, paste0("pour_", cod, ".dbf")),
-  #               path(DEM_DIR, paste0("pour_", cod, ".prj")),
-  #               path(DEM_DIR, paste0("pour_", cod, ".shx")),
-  #               bacia_tmp))
+wbt_extract_streams(flow_accum = D8_ACCUM, output = BIG_STREAMS_RAST, threshold = 5000000)
+wbt_stream_link_identifier(streams = BIG_STREAMS_RAST, d8_pntr = D8_POINTER, output = STREAM_LINKS)
+wbt_subbasins(d8_pntr = D8_POINTER, streams = STREAM_LINKS, output = SUBBASINS)
+
+bacias_estacoes <- as.polygons(rast(SUBBASINS),  dissolve = TRUE) |>
+  st_as_sf() |>  st_set_crs(crs(rast(SUBBASINS)))
+
+bacias_estacoes <- bacias_estacoes |>
+  mutate(area_km2 = as.numeric(st_area(geometry)) / 1e6)
+
+# Spatial join — cada estação herda a bacia onde cai
+estacoes_com_bacia <- estacoes_snap |> st_join(bacias_estacoes, join = st_within) |>
+  left_join(bacias_estacoes |> st_drop_geometry() |> select(subbacias, area_km2), by = "subbacias")
+
+# Verifica distribuição
+message("Estações por bacia:")
+print(table(estacoes_com_bacia$subbacias))
+
+# 5.10 QA simples - estação precisa cair dentro da própria bacia
+validacao <- st_intersects(estacoes_snap, bacias_estacoes)
+
+n_fora <- sum(lengths(validacao) == 0)
+
+if (n_fora > 0) {
+  warning(n_fora, " estação(ões) fora da própria bacia.")
 }
 
-bacias_estacoes <- bind_rows(bacias_lista)
+message("Bacias geradas: ", nrow(bacias_estacoes))
+message("Área mín: ", round(min(bacias_estacoes$area_km2), 1), " km²")
+message("Área máx: ", round(max(bacias_estacoes$area_km2), 1), " km²")
 
-message("\n  Área de bacia — min: ", round(min(bacias_estacoes$area_bacia_km2), 1),
-        " km² | max: ", round(max(bacias_estacoes$area_bacia_km2), 1), " km²")
+# 5.11 Salva
+st_write(bacias_estacoes, path(SUBBASINS_VEC), delete_dsn = TRUE, quiet = TRUE)
+message("  Bacias exportadas em: ", BACIAS_PATH)
+table(is.na(bacias_estacoes$station_code))
 
-st_write(bacias_estacoes, BACIAS_PATH, delete_dsn = TRUE, quiet = TRUE)
-
+# Mapa de conferência
+ggplot() +
+  geom_sf(data = bacias_estacoes, aes(fill = area_km2), color = "gray40", linewidth = 0.3) +
+  geom_sf(data = estacoes_com_bacia, color = "red", size = 2) +
+  scale_fill_viridis_c(name = "Área (km²)", option = "Blues", direction = -1) +
+  labs(
+    title    = "Subdivisão de bacias — wbt_basins",
+    subtitle = paste0("N = ", nrow(bacias_estacoes), " bacias")
+  ) +
+  theme_void(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
 # -----------------------------------------------------------------------------
 # 6. ATRIBUTOS TOPOLÓGICOS DA REDE
 # -----------------------------------------------------------------------------
-
 message("\n=== 6. Atributos topológicos ===")
 
 # Acumulação de fluxo no ponto de cada estação (proxy de área contribuinte)
