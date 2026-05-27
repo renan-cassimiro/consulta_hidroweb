@@ -372,10 +372,10 @@ gerar_graficos <- function(tabela_resumo, dados_empilhados, inventario) {
   )
 }
 
-snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 3000){
+snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 3000) {
   
   # --------------------------------------------------
-  # buffer em metros
+  # 1. Cria buffer de busca em metros
   # --------------------------------------------------
   buffer_busca <- ponto_sf |>
     st_transform(5880) |>
@@ -383,175 +383,68 @@ snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 3000)
     st_transform(crs(streams_rast))
   
   # --------------------------------------------------
-  # recorta drenagem
+  # 2. Recorta e mascara a drenagem
   # --------------------------------------------------
-  streams_crop <- crop(streams_rast, vect(buffer_busca)) |>
-    mask(vect(buffer_busca))
+  # O parâmetro mask = TRUE já limpa o que está fora do buffer circular
+  streams_crop <- crop(streams_rast, vect(buffer_busca), mask = TRUE)
   
-  # pixels da drenagem
+  # Se o crop retornar um raster vazio (sem canais no raio)
+  if (all(is.na(minmax(streams_crop)))) {
+    return(NULL)
+  }
+  
+  # --------------------------------------------------
+  # 3. Converte pixels do raster para pontos sf
+  # --------------------------------------------------
   pts <- as.points(streams_crop, values = TRUE) |>
     st_as_sf()
   
-  # mantém só canal
-  pts <- pts |> filter(rede_drenagem == 1)
+  # Captura o nome dinâmico da coluna (evita erro caso o raster mude de nome)
+  col_stream <- names(pts)[1]
   
-  # nenhum rio no raio
+  # Mantém apenas onde é canal (valor == 1)
+  pts <- pts[pts[[col_stream]] == 1, ]
+  
   if (nrow(pts) == 0) {
     return(NULL)
   }
   
   # --------------------------------------------------
-  # distância até cada pixel
+  # 4. Calcula distância do ponto original até cada pixel
   # --------------------------------------------------
   d <- st_distance(
     st_transform(ponto_sf, 5880),
     st_transform(pts, 5880)
   )
-  
   pts$dist_m <- as.numeric(d)
   
   # --------------------------------------------------
-  # extrai acumulação
+  # 5. Extrai acumulação
   # --------------------------------------------------
   acc <- terra::extract(accum_rast, vect(pts))
-  pts$accum <- acc[[2]]
+  pts$accum_snap <- acc[[2]] # A 2ª coluna tem os valores do raster
   
   # --------------------------------------------------
-  # ordena:
-  # 1 menor distância
-  # 2 maior acumulação
+  # 6. Ordena e seleciona o melhor pixel
+  #    (1º Menor distância, 2º Maior acumulação)
   # --------------------------------------------------
-  pts <- pts |> arrange(dist_m, desc(accum))
+  pts <- pts |> arrange(dist_m, desc(accum_snap))
   melhor <- pts[1, ]
   melhor$dist_snap_m <- melhor$dist_m
   
+  # --------------------------------------------------
+  # 7. A MÁGICA: Captura o ID linear da célula global
+  # --------------------------------------------------
+  # Extrai as coordenadas XY do ponto vencedor
+  xy_coords <- st_coordinates(melhor)
+  
+  # Descobre qual é o ID dessa célula no raster de acumulação original
+  melhor$snap_cell <- terra::cellFromXY(streams_rast, xy_coords)
+  # --------------------------------------------------
+  # 8. Limpa colunas desnecessárias e retorna
+  # --------------------------------------------------
+  melhor <- melhor |> 
+    select(dist_snap_m, accum_snap, snap_cell, geometry)
+  
   return(melhor)
-}
-
-
-snap_para_maior_acumulacao <- function(ponto_sf, accum_rast, snap_dist = SNAP_DIST){
-  
-  # ---------------------------------------------------------------------------
-  # Objetivo:
-  # Encontrar, dentro de um raio de busca, o pixel com maior acumulação
-  # de fluxo e mover ("snap") a estação para esse ponto.
-  #
-  # Inputs:
-  #   ponto_sf    -> ponto sf de uma estação
-  #   accum_rast  -> raster de acumulação de fluxo
-  #   snap_dist   -> raio de busca em metros
-  #
-  # Output:
-  #   sf point com:
-  #     - geometria snapped
-  #     - distância do deslocamento
-  #     - valor de acumulação no pixel escolhido
-  # ---------------------------------------------------------------------------
-  
-  
-  # ---------------------------------------------------------------------------
-  # 1. Cria buffer de busca
-  #
-  # O buffer precisa ser feito em CRS projetado (metros).
-  # EPSG:5880 = SIRGAS 2000 / Polyconic
-  # ---------------------------------------------------------------------------
-  # CRS do raster forçado explicitamente
-  #Tem um problema nessa lógica, porque o ponto de snap vai ser sempre o de maior valor de 
-  #acumulação dentro do limite estabeleciodo (sendo rio ou não). NA verdade, ele deve fazer o snap no ponto que cruza o rio
-  # Substituído na função acima
-  crs_rast <- crs(accum_rast)
-  # Reprojeta ponto para CRS métrico para fazer o buffer em metros
-  buffer_busca <- ponto_sf |>
-    st_buffer(snap_dist)
-  
-  # Diagnóstico
-  message("  Ponto: ", st_coordinates(ponto_sf), " Proj ", st_crs(ponto_sf)$epsg)
-  message("  Extensão buffer: ", paste(round(ext(vect(buffer_busca))[1:4], 2), collapse = ", "), " Proj ", st_crs(ponto_sf)$epsg)
-  message("  Extensão raster: ", paste(round(ext(accum_rast)[1:4], 2), collapse = ", "), " Proj ", st_crs(ponto_sf)$epsg)
-  
-  # Verifica se sobrepõem
-  print(relate(ext(accum_rast), ext(vect(buffer_busca)), "intersects"))
-  
-  # ---------------------------------------------------------------------------
-  # 2. Recorta o raster para reduzir processamento
-  # ---------------------------------------------------------------------------
-  accum_crop <- crop(accum_rast, vect(buffer_busca))
-  
-  # ---------------------------------------------------------------------------
-  # 3. Aplica máscara mantendo apenas pixels dentro do buffer
-  # ---------------------------------------------------------------------------
-  accum_mask <- mask(accum_crop, vect(buffer_busca))
-  # ---------------------------------------------------------------------------
-  # 4. Extrai valores do raster para dataframe
-  #
-  # Exemplo:
-  #   acumulacao
-  #   1200
-  #   3400
-  # ---------------------------------------------------------------------------
-  vals <- values(accum_mask, dataframe = TRUE)
-  
-  # ---------------------------------------------------------------------------
-  # 5. Nome da coluna raster
-  #
-  # Necessário porque o nome depende do raster carregado.
-  # ---------------------------------------------------------------------------
-  col_rast <- names(vals)[1]
-  
-  # ---------------------------------------------------------------------------
-  # 6. Remove pixels NA
-  # ---------------------------------------------------------------------------
-  vals <- vals[!is.na(vals[[col_rast]]),]
-  
-  # ---------------------------------------------------------------------------
-  # 7. Se não houver pixels válidos no buffer → retorna NULL
-  # ---------------------------------------------------------------------------
-  if (length(vals) == 0) {
-    return(NULL)
-  }
-  # ---------------------------------------------------------------------------
-  # 8. Identifica pixel com maior acumulação
-  # ---------------------------------------------------------------------------
-  max_idx <- which.max(vals)
-  
-  # ---------------------------------------------------------------------------
-  # 9. Recupera ID real da célula raster
-  #
-  # values() perde a referência espacial direta.
-  # Precisamos mapear índice -> cell_id.
-  # ---------------------------------------------------------------------------
-  cell_ids <- which(!is.na(values(accum_mask)))
-  cell_id <- cell_ids[max_idx]
-  
-  # ---------------------------------------------------------------------------
-  # 10. Converte cell_id para coordenadas XY
-  # ---------------------------------------------------------------------------
-  xy <- xyFromCell(accum_mask, cell_id)
-  
-  # ---------------------------------------------------------------------------
-  # 11. Cria ponto sf snapped
-  # ---------------------------------------------------------------------------
-  ponto_snap <- st_sfc( st_point(xy), crs = st_crs(ponto_sf)) |>
-    st_as_sf()
-  
-  # ---------------------------------------------------------------------------
-  # 12. Calcula distância entre ponto original e snapped
-  # ---------------------------------------------------------------------------
-  dist_m <- st_distance(
-    st_transform(ponto_sf, 5880),
-    st_transform(ponto_snap, 5880),
-    by_element = TRUE
-  ) |>
-    as.numeric()
-  
-  # ---------------------------------------------------------------------------
-  # 13. Adiciona atributos de controle
-  # ---------------------------------------------------------------------------
-  ponto_snap$dist_snap_m <- dist_m
-  ponto_snap$accum_snap <- vals[max_idx]
-  
-  # ---------------------------------------------------------------------------
-  # 14. Retorna ponto snapped
-  # ---------------------------------------------------------------------------
-  return(ponto_snap)
 }
