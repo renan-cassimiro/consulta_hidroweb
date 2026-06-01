@@ -83,21 +83,17 @@ REPORT_DIR    <- path(OUTPUT_DIR, "report")
 IMAGE_DIR     <- path(OUTPUT_DIR, "images")
 DATA_DIR      <- path(OUTPUT_DIR, "data")
 
-STATIONS_DISCHARGE_DIR <- path(DATA_DIR, "stations_discharge")
-STATIONS_DISCHARGE_ORG_DIR <- path(DATA_DIR, "stations_discharge_organized")
-STATIONS_WATER_LEVEL_DIR <- path(DATA_DIR, "stations_water_level")
-STATIONS_WATER_LEVEL_ORG_DIR <- path(DATA_DIR, "stations_water_level_organized")
+STATIONS_PRECIPITATION_DIR <- path(DATA_DIR, "stations_precipitation")
+STATIONS_PRECIPITATION_ORG_DIR <- path(DATA_DIR, "stations_precipitation_organized")
 
-INVENTARIO_PATH <- path(DATA_DIR, paste0(RUN_NAME, "_inventario.parquet"))
+INVENTARIO_PATH <- path(DATA_DIR, paste0(RUN_NAME, "_inventario_precipitation.parquet"))
 
 dir.create(DATA_DIR)
 dir.create(RUN_NAME)
 dir.create(IMAGE_DIR)
 dir.create(REPORT_DIR)
-dir.create(STATIONS_DISCHARGE_DIR)
-dir.create(STATIONS_DISCHARGE_ORG_DIR)
-dir.create(STATIONS_WATER_LEVEL_DIR)
-dir.create(STATIONS_WATER_LEVEL_ORG_DIR)
+dir.create(STATIONS_PRECIPITATION_DIR)
+dir.create(STATIONS_PRECIPITATION_ORG_DIR)
 
 # -----------------------------------------------------------------------------
 # 1. ÁREA DE ESTUDO E ESTAÇÕES
@@ -115,7 +111,7 @@ estacoes_filtradas <- NULL
 
 # Consulta o inventário da ANA para estações do tipo fluviométrico (flu)
 # dentro do polígono da área de estudo
-inventario <- inventory(stationType = "flu", as_sf = TRUE, aoi = area_estudo)
+inventario <- inventory(stationType = "plu", as_sf = TRUE, aoi = area_estudo)
 
 
 # Aplica filtro por estações pré-selecionadas (quando fornecidas)
@@ -141,27 +137,13 @@ ggplot() +
 dados_inventario <- stationsData(inventoryResult = inventario, waterLevel = FALSE)
 walk2(dados_inventario, 
       names(dados_inventario), 
-      ~ write_parquet(.x, path(STATIONS_DISCHARGE_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
+      ~ write_parquet(.x, path(STATIONS_PRECIPITATION_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
 
 # Organiza os dados no formato padrão do {hydrobr}
 dados_inventario_organizado <- organize(dados_inventario)
 walk2(dados_inventario_organizado, 
       names(dados_inventario_organizado), 
-      ~ write_parquet(.x, path(STATIONS_DISCHARGE_ORG_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-
-
-# Baixa as séries históricas de nível  de todas as estações do inventário
-dados_inventario <- stationsData(inventoryResult = inventario, waterLevel = TRUE)
-walk2(dados_inventario, 
-      names(dados_inventario), 
-      ~ write_parquet(.x, path(STATIONS_WATER_LEVEL_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-# Organiza os dados no formato padrão do {hydrobr}
-dados_inventario_organizado <- organize(dados_inventario)
-walk2(dados_inventario_organizado, 
-      names(dados_inventario_organizado), 
-      ~ write_parquet(.x, path(STATIONS_WATER_LEVEL_ORG_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
+      ~ write_parquet(.x, path(STATIONS_PRECIPITATION_ORG_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
 
 # ----e-------------------------------------------------------------------------
 # 4. SELEÇÃO DE ESTAÇÕES POR CRITÉRIOS DE QUALIDADE
@@ -179,7 +161,7 @@ dadosestacoes_selecionadas <- selectStations(
   organizeResult = dados_inventario_organizado,
     mode           = "yearly",
     maxMissing     = 100,
-    minYears       = 5,
+    minYears       = 10,
     month          = 1,
     iniYear        = 2010,
     finYear        = 2026,
@@ -196,7 +178,7 @@ dadosestacoes_selecionadas <- selectStations(
 resultados <- map2(
   dadosestacoes_selecionadas$series,
   names(dadosestacoes_selecionadas$series),
-  analisar_estacao
+  analisar_estacao_fluviometrica
 )
 
 # -----------------------------------------------------------------------------

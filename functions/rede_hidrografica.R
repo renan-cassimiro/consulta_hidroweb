@@ -65,26 +65,36 @@ path <- fs::path
 # -----------------------------------------------------------------------------
 source(here("functions/functions.R"))
 
-RESOURCES_DIR <- here("resources")
-OUTPUT_DIR <- here("output", "iriri_river")
+RUN_NAME <- "amacro"
+
+INPUT_DIR <- here("input", RUN_NAME)
+DEM_PATH <- path(INPUT_DIR, "bacias_amacro_fathomdem_low_res.tif")
+STUDAY_AREA_PATH <- path(INPUT_DIR, "bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")
+
+OUTPUT_DIR <- here("output", RUN_NAME)
 DATA_DIR <- path(OUTPUT_DIR, "data")
-DEM_PATH <- path(RESOURCES_DIR, "fathomdem_bacia_rio_iriri_recortado_metros.tif")   # ex: "resources/dem/fathomdem_30m.tif"
 DEM_DIR <- path(DATA_DIR, "dem")
 
+dir.create(RUN_NAME)
 dir.create(DATA_DIR)
 dir.create(DEM_DIR)
 
 # Caminhos dos produtos intermediários
-DEM_PATH_PROJ <- path(DEM_DIR, "dem_projetado.tif")
-DEM_CLIP      <- path(DEM_DIR, "dem_clip.tif")
-DEM_BREACH    <- path(DEM_DIR, "dem_breach.tif")
-DEM_FILL      <- path(DEM_DIR, "dem_fill.tif")
-D8_POINTER    <- path(DEM_DIR, "direcao_fluxo.tif")
-D8_ACCUM      <- path(DEM_DIR, "acumulacao_fluxo.tif")
-STREAMS_RAST  <- path(DEM_DIR, "rede_drenagem.tif")
-STREAMS_VECT  <- path(DEM_DIR, "rede_drenagem.gpkg")
-BACIAS_PATH   <- path(DEM_DIR, "bacias_estacoes.gpkg")
-SNAP_PATH     <- path(DEM_DIR, "estacoes_snap.gpkg")
+DEM_PATH_PROJ <- path(DEM_DIR, paste0(RUN_NAME, "_dem_projected.tif"))
+DEM_CLIP      <- path(DEM_DIR, paste0(RUN_NAME, "_dem_clip.tif"))
+DEM_BREACH    <- path(DEM_DIR, paste0(RUN_NAME, "_dem_breach.tif"))
+DEM_FILL      <- path(DEM_DIR, paste0(RUN_NAME, "_dem_fill.tif"))
+D8_POINTER    <- path(DEM_DIR, paste0(RUN_NAME, "_flow_direction.tif"))
+D8_ACCUM      <- path(DEM_DIR, paste0(RUN_NAME, "_flow_accumulation.tif"))
+STREAMS_RAST  <- path(DEM_DIR, paste0(RUN_NAME, "_drainge_network.tif"))
+STREAMS_VECT  <- path(DEM_DIR, paste0(RUN_NAME, "_drainge_network.gpkg"))
+BACIAS_PATH   <- path(DATA_DIR, paste0(RUN_NAME, "_station_watersheds.gpkg"))
+SNAP_PATH     <- path(DATA_DIR, paste0(RUN_NAME, "_snapped_stations.gpkg"))
+
+BIG_STREAMS_RAST <- path(DEM_DIR, paste0(RUN_NAME, "_higher_order_drainge_network.tif"))
+STREAM_LINKS <- path(DEM_DIR, paste0(RUN_NAME, "_higher_order_stream_links.tif"))
+SUBBASINS <- path(DEM_DIR, paste0(RUN_NAME, "_higher_order_subbasins.tif"))
+SUBBASINS_VEC <- path(DEM_DIR, paste0(RUN_NAME, "_higher_order_subbasins.gpkg"))
 
 # CRS de destino — South America Albers Equal Area
 # Preserva área, adequado para toda a extensão amazônica
@@ -96,7 +106,7 @@ CRS_PROJ <- "ESRI:102033"
 message("=== 1. Pré-processamento do DEM ===")
 
 # Carrega área de estudo e reprojeta para CRS do DEM
-area_estudo <- st_read(path(RESOURCES_DIR, "hybas_lake_sa_lev05_v1c_rio_iriri.gpkg"))
+area_estudo <- st_read(STUDAY_AREA_PATH)
 
 dem_raw <- rast(DEM_PATH)
 message("  DEM original: ", nrow(dem_raw), " x ", ncol(dem_raw), " | CRS: ", crs(dem_raw, describe = TRUE)$code)
@@ -104,7 +114,7 @@ message("  DEM original: ", nrow(dem_raw), " x ", ncol(dem_raw), " | CRS: ", crs
 # Reprojeta o DEM (operação pesada — salva em disco)
 message("Reprojetando DEM para Albers Equal Area...")
 dem_proj <- project(dem_raw, CRS_PROJ, method = "bilinear")
-writeRaster(dem_proj, path(DEM_DIR, "dem_projetado.tif"), overwrite = TRUE)
+writeRaster(dem_proj, DEM_PATH_PROJ, overwrite = TRUE)
 
 # TODO: Clip se a área de estudo for menor que o DEM
 ext_estudo <- area_estudo 
@@ -147,7 +157,7 @@ message("\n=== 3. Extração da rede de drenagem ===")
 # Limiar de acumulação para definir início de canal
 # 30m: ~1000 células ≈ 0.9 km² de área contribuinte mínima
 # Ajuste conforme necessário para a densidade de drenagem da região
-LIMIAR_ACUMULACAO <- 5000
+LIMIAR_ACUMULACAO <- 50
 
 message("  Limiar de acumulação: ", LIMIAR_ACUMULACAO, " células (~", round(LIMIAR_ACUMULACAO * 30^2 / 1e6, 2), " km²)")
 wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LIMIAR_ACUMULACAO)
@@ -181,6 +191,9 @@ message("\n=== 4. Snap hidrológico das estações ===")
 # Carrega estações
 analysed_stations <- st_read_parquet(path(DATA_DIR, "analysed_stations.parquet"))
 
+###Filtrar por áreas de contribuição
+analysed_stations <- filter(analysed_stations, area_km2>10000)
+
 # Reprojeta para CRS do DEM
 estacoes_dem <- st_transform(analysed_stations, crs(rast(D8_ACCUM)))
 
@@ -189,12 +202,11 @@ streams_rast <- rast(STREAMS_RAST)
 accum_rast <- rast(D8_ACCUM)
 
 # Distância máxima de busca (m)
-SNAP_DIST <- 1000
+SNAP_DIST <- 15000
 
 # -----------------------------------------------------------------------------
 # Aplicar snap
 # -----------------------------------------------------------------------------
-
 snapped_list <- vector("list", nrow(estacoes_dem))
 
 for (i in seq_len(nrow(estacoes_dem))) {
@@ -249,12 +261,7 @@ st_write(estacoes_snap, SNAP_PATH,  delete_dsn = TRUE, quiet = TRUE)
 message("\n=== 5. Delimitação das bacias de contribuição ===")
 message("  Processando ", nrow(estacoes_snap), " estações — pode demorar alguns minutos...")
 
-BIG_STREAMS_RAST <- path(DEM_DIR, "rede_drenagem_grande.tif")
-STREAM_LINKS <- path(DEM_DIR, "stream_links.tif")
-SUBBASINS <- path(DEM_DIR, "subbacias.tif")
-SUBBASINS_VEC <- path(DEM_DIR, "subbacias.gpkg")
-
-wbt_extract_streams(flow_accum = D8_ACCUM, output = BIG_STREAMS_RAST, threshold = 5000000)
+wbt_extract_streams(flow_accum = D8_ACCUM, output = BIG_STREAMS_RAST, threshold = 5000)
 wbt_stream_link_identifier(streams = BIG_STREAMS_RAST, d8_pntr = D8_POINTER, output = STREAM_LINKS)
 wbt_subbasins(d8_pntr = D8_POINTER, streams = STREAM_LINKS, output = SUBBASINS)
 
@@ -266,11 +273,11 @@ bacias_estacoes <- bacias_estacoes |>
 
 # Spatial join — cada estação herda a bacia onde cai
 estacoes_com_bacia <- estacoes_snap |> st_join(bacias_estacoes, join = st_within) |>
-  left_join(bacias_estacoes |> st_drop_geometry() |> select(subbacias, area_km2), by = "subbacias")
+  left_join(bacias_estacoes |> st_drop_geometry() |> select(amacro_higher_order_subbasins, area_km2), by = "amacro_higher_order_subbasins")
 
 # Verifica distribuição
 message("Estações por bacia:")
-print(table(estacoes_com_bacia$subbacias))
+print(table(estacoes_com_bacia$amacro_higher_order_subbasins))
 
 # 5.10 QA simples - estação precisa cair dentro da própria bacia
 validacao <- st_intersects(estacoes_snap, bacias_estacoes)
@@ -288,13 +295,13 @@ message("Área máx: ", round(max(bacias_estacoes$area_km2), 1), " km²")
 # 5.11 Salva
 st_write(bacias_estacoes, path(SUBBASINS_VEC), delete_dsn = TRUE, quiet = TRUE)
 message("  Bacias exportadas em: ", BACIAS_PATH)
-table(is.na(bacias_estacoes$station_code))
+table(is.na(bacias_estacoes$xingu_river_higher_order_subbasins))
 
 # Mapa de conferência
 ggplot() +
   geom_sf(data = bacias_estacoes, aes(fill = area_km2), color = "gray40", linewidth = 0.3) +
-  geom_sf(data = estacoes_com_bacia, color = "red", size = 2) +
-  scale_fill_viridis_c(name = "Área (km²)", option = "Blues", direction = -1) +
+  geom_sf(data = estacoes_com_bacia, color = "blue", size = 2) +
+  scale_fill_viridis_c(name = "Área (km²)", direction = -1) +
   labs(
     title    = "Subdivisão de bacias — wbt_basins",
     subtitle = paste0("N = ", nrow(bacias_estacoes), " bacias")
@@ -480,13 +487,12 @@ st_write(
 )
 
 message("\n=== Shapefile 'nos_do_grafo_rede.shp' exportado ===")
-
 # -------------------------------------------------------------------------
 # Associar estação ao pixel da rede e construir o grafo entre estações
 # -------------------------------------------------------------------------
 message("\n=== Construindo o grafo das estações ===")
 
-# 1. Tabela auxiliar de nós (já com as infos topológicas)
+# 1. Tabela auxiliar de nós
 station_nodes <- estacoes_snap |>
   st_drop_geometry() |>
   select(
@@ -502,6 +508,10 @@ station_nodes <- estacoes_snap |>
 nodes_est_char <- as.character(station_nodes$snap_cell)
 valid_nodes <- nodes_est_char[nodes_est_char %in% V(grafo_rede)$name]
 
+# --- A CORREÇÃO AQUI ---
+# Remove duplicidades geradas por estações no mesmo pixel
+unique_valid_nodes <- unique(valid_nodes)
+
 if (length(valid_nodes) < length(nodes_est_char)) {
   warning("Atenção: Algumas estações não foram mapeadas na rede.")
 }
@@ -509,33 +519,53 @@ if (length(valid_nodes) < length(nodes_est_char)) {
 # -------------------------------------------------------------------------
 # Matriz de Distâncias Topológicas (Cálculo Otimizado igraph)
 # -------------------------------------------------------------------------
-# mode = "out" garante que só mede caminhos no sentido do fluxo (downstream)
 message("  Calculando matriz de roteamento hidrológico...")
-dist_mat <- distances(grafo_rede, v  = valid_nodes, to = valid_nodes, mode = "out")
+dist_mat <- distances(
+  grafo_rede,
+  v  = unique_valid_nodes,
+  to = unique_valid_nodes, # Exige valores únicos
+  mode = "out"
+)
 
 # -------------------------------------------------------------------------
-# Identificar o vizinho imediato downstream
+# Identificar o vizinho imediato downstream (Versão Blindada Hidrologicamente)
 # -------------------------------------------------------------------------
+message("  Mapeando conexões estritas de jusante...")
 
-edges_est_list <- lapply(seq_along(valid_nodes), function(i) {
-  from_node <- valid_nodes[i]
-  dists <- dist_mat[i, ]
+# Cria um vetor nomeado para busca rápida de acumulação por célula
+celula_para_accum <- setNames(
+  station_nodes$acumulacao_celulas, 
+  as.character(station_nodes$snap_cell)
+)
+
+edges_est_list <- lapply(seq_along(station_nodes$station_code), function(i) {
+  from_code  <- station_nodes$station_code[i]
+  from_cell  <- as.character(station_nodes$snap_cell[i])
+  from_accum <- station_nodes$acumulacao_celulas[i]
   
-  # Filtra para manter apenas caminhos válidos:
-  # > 0 (ignora a si mesmo) e finito (ignora o que não está downstream)
+  if (!(from_cell %in% unique_valid_nodes)) return(NULL)
+  
+  # Pega as distâncias a partir desta célula
+  dists <- dist_mat[from_cell, ]
   alcançaveis <- dists[dists > 0 & is.finite(dists)]
   
   if (length(alcançaveis) > 0) {
-    # O vizinho topológico imediato é o que está mais perto (menor caminho)
-    to_node <- names(which.min(alcançaveis))
     
-    # Traduz de volta de snap_cell (ID do pixel) para station_code
-    code_from <- station_nodes$station_code[station_nodes$snap_cell == as.numeric(from_node)]
-    code_to   <- station_nodes$station_code[station_nodes$snap_cell == as.numeric(to_node)]
+    # --- A CORREÇÃO HIDROLÓGICA CRUCIAL ---
+    # Só aceita células de destino cuja acumulação seja MAIOR que a da nossa origem
+    acumulacoes_destino <- celula_para_accum[names(alcançaveis)]
+    alcançaveis_jusante <- alcançaveis[acumulacoes_destino > from_accum]
     
-    return(tibble(from = code_from, to = code_to))
+    # Se sobrou alguma estação legítima rio abaixo...
+    if (length(alcançaveis_jusante) > 0) {
+      # Seleciona a mais próxima dentre as que estão estritamente à JUSANTE
+      to_cell <- names(which.min(alcançaveis_jusante))
+      code_to <- station_nodes$station_code[as.character(station_nodes$snap_cell) == to_cell]
+      
+      return(tibble(from = from_code, to = code_to))
+    }
   }
-  return(NULL) # Estações que não têm ninguém downstream (exutórios)
+  return(NULL)
 })
 
 edges_est <- bind_rows(edges_est_list)
@@ -543,7 +573,6 @@ edges_est <- bind_rows(edges_est_list)
 # -------------------------------------------------------------------------
 # Distância Euclidiana Vetorizada (Em Km)
 # -------------------------------------------------------------------------
-# Em vez de fazer st_distance dentro de um for, fazemos de uma vez só!
 geom_from <- estacoes_snap$geometry[match(edges_est$from, estacoes_snap$station_code)]
 geom_to   <- estacoes_snap$geometry[match(edges_est$to, estacoes_snap$station_code)]
 
@@ -567,16 +596,18 @@ grafo <- graph_from_data_frame(
   vertices = vertices_est
 )
 
-# -------------------------------------------------------------------------
 # Métricas de Topologia (Centralidade)
-# -------------------------------------------------------------------------
-
 V(grafo)$grau_entrada <- degree(grafo, mode = "in")
 V(grafo)$grau_saida   <- degree(grafo, mode = "out")
 V(grafo)$betweenness  <- betweenness(grafo, directed = TRUE, normalized = TRUE)
 
-message("  Grafo final estruturado: ", vcount(grafo), " nós | ", ecount(grafo), " arestas")
-message("  Estações sem conexão (isoladas): ", sum(degree(grafo) == 0))
+message(
+  "  Grafo final estruturado: ",
+  vcount(grafo), " nós | ",
+  ecount(grafo), " arestas"
+)
+
+message("  Estações sem conexão jusante (exutórios ou isoladas): ", sum(degree(grafo, mode="out") == 0))
 
 # -------------------------------------------------------------------------
 # Salvar e Visualizar

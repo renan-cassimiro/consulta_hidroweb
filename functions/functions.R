@@ -135,6 +135,121 @@ analisar_estacao <- function(df, station_code) {
 
 
 # =============================================================================
+# analisar_estacao
+# =============================================================================
+#' Aplica análise estatística completa a uma estação fluviométrica
+#'
+#' Recebe a série diária de vazão de uma estação, agrega para médias mensais,
+#' realiza decomposição STL e aplica os seguintes testes:
+#'   - Mann-Kendall clássico (na componente de tendência STL)
+#'   - Mann-Kendall com correção Yue-Pilon (na série original, para autocorrelação)
+#'   - Estimador de slope de Sen (na série original)
+#'   - Teste de Pettitt (detecção de ponto de mudança)
+#'
+#' Anomalias são classificadas por z-score em relação à climatologia mensal:
+#'   |z| > 1 → moderada | |z| > 2 → severa | |z| > 3 → extremo
+#'
+#' @param df           data.frame com colunas `date` e `stream_flow_m3_s`
+#' @param station_code character. Código ANA da estação (8 dígitos)
+#'
+#' @return Lista com os elementos:
+#'   $station_code   — código da estação
+#'   $dados          — data.frame mensal com tendência, resíduo e anomalias
+#'   $decomposicao   — objeto stl com as 3 componentes da decomposição
+#'   $mann_kendall   — resultado de MannKendall() (tau, sl)
+#'   $yue_pilon      — resultado de zyp.trend.vector() (correção de autocorrelação)
+#'   $sens_slope     — resultado de sens.slope() (estimates, p.value)
+#'   $pettitt        — resultado de pettitt.test() (estimate, p.value)
+#'   $n_anomalias    — nº de meses com anomalia severa (|z| > 2)
+#'   $n_extremos     — nº de meses com anomalia extrema (|z| > 3)
+# =============================================================================
+
+analisar_estacao_fluviometrica <- function(df, station_code) {
+  
+  # --- 1. Agregação para médias mensais ---------------------------------------
+  dt_mensal <- df |>
+    mutate(
+      date = as.Date(date),
+      ano  = year(date),
+      mes  = month(date)
+    ) |>
+    group_by(ano, mes) |>
+    summarise(
+      rainfall_mm = mean(rainfall_mm, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(date = as.Date(paste(ano, mes, "01", sep = "-"))) |>
+    arrange(date) |>
+    filter(!is.na(rainfall_mm))
+  
+  # --- 2. Decomposição STL ----------------------------------------------------
+  # Frequência = 12 (série mensal); s.window = "periodic" assume sazonalidade
+  # estável ao longo do tempo
+  ts_vazao <- ts(dt_mensal$rainfall_mm,
+                 frequency = 12,
+                 start = c(min(dt_mensal$ano), min(dt_mensal$mes)))
+  
+  decomp <- stl(ts_vazao, s.window = "periodic")
+  
+  dt_mensal <- dt_mensal |>
+    mutate(
+      trend = as.numeric(decomp$time.series[, "trend"]),
+      resid = as.numeric(decomp$time.series[, "remainder"])
+    )
+  
+  # --- 3. Testes estatísticos -------------------------------------------------
+  
+  # Mann-Kendall aplicado à componente de tendência (sem sazonalidade nem ruído)
+  mk <- MannKendall(dt_mensal$trend)
+  
+  # Yue-Pilon: correção para autocorrelação serial (aplicado à série original)
+  mk_mod <- zyp.trend.vector(dt_mensal$rainfall_mm, method = "yuepilon")
+  
+  # Slope de Sen: estimativa não-paramétrica da taxa de mudança (série original)
+  sen <- sens.slope(dt_mensal$rainfall_mm)
+  
+  # --- 4. Anomalias por z-score (climatologia mensal) ------------------------
+  clim <- dt_mensal |>
+    group_by(mes) |>
+    summarise(
+      media = mean(rainfall_mm, na.rm = TRUE),
+      sd    = sd(rainfall_mm,   na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  dt_mensal <- dt_mensal |>
+    left_join(clim, by = "mes") |>
+    mutate(
+      z        = (rainfall_mm - media) / sd,
+      anomalia = case_when(
+        abs(z) > 2 ~ "severa",
+        abs(z) > 1 ~ "moderada",
+        .default   = "normal"
+      ),
+      extremo  = abs(z) > 3,
+      moderada = abs(z) > 2 & abs(z) <= 3
+    )
+  
+  # --- 5. Ponto de mudança (Pettitt) -----------------------------------------
+  pettitt <- pettitt.test(dt_mensal$rainfall_mm)
+  
+  # --- 6. Retorno -------------------------------------------------------------
+  list(
+    station_code = station_code,
+    dados        = dt_mensal,
+    decomposicao = decomp,
+    mann_kendall = mk,
+    yue_pilon    = mk_mod,
+    sens_slope   = sen,
+    pettitt      = pettitt,
+    n_anomalias  = sum(dt_mensal$anomalia == "severa"),
+    n_extremos   = sum(dt_mensal$extremo)
+  )
+}
+
+
+
+# =============================================================================
 # gerar_graficos
 # =============================================================================
 #' Gera todos os gráficos do relatório hidrológico
@@ -240,7 +355,8 @@ gerar_graficos <- function(tabela_resumo, dados_empilhados, inventario) {
   
   tendencias_classificadas <- ggplot(
     dados_com_classificacao,
-    aes(x = date, y = stream_flow_m3_s)
+    # aes(x = date, y = stream_flow_m3_s)
+    aes(x = date, y = rainfall_mm)
   ) +
     geom_line(alpha = 0.3, linewidth = 0.3, color = "gray50") +
     geom_line(aes(y = trend, color = tendencia), linewidth = 1.2) +
@@ -273,7 +389,7 @@ gerar_graficos <- function(tabela_resumo, dados_empilhados, inventario) {
     ) |>
     st_as_sf()
   
-  rios <- st_read(path(RESOURCES_DIR, "ne_10m_rivers_lake_centerlines_amazonia.gpkg"),
+  rios <- st_read(path(INPUT_DIR, "ne_10m_rivers_lake_centerlines_bacias_amacro.gpkg"),
                   quiet = TRUE)
   
   mapa_tendencias_classificadas <- ggplot() +
@@ -325,7 +441,7 @@ gerar_graficos <- function(tabela_resumo, dados_empilhados, inventario) {
     left_join(tabela_resumo, by = "station_code") |>
     mutate(abs_tau = abs(tau_mk))
   
-  amacro <- st_read(path(RESOURCES_DIR, "AMACRO/AMACRO.shp"), quiet = TRUE)
+  amacro <- st_read(path(INPUT_DIR, "AMACRO/AMACRO.shp"), quiet = TRUE)
   
   tema_mapa <- theme_void(base_size = 14) +
     theme(
@@ -372,7 +488,7 @@ gerar_graficos <- function(tabela_resumo, dados_empilhados, inventario) {
   )
 }
 
-snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 3000) {
+snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 15000) {
   
   # --------------------------------------------------
   # 1. Cria buffer de busca em metros
@@ -390,6 +506,7 @@ snap_para_rede <- function(ponto_sf, streams_rast, accum_rast, snap_dist = 3000)
   
   # Se o crop retornar um raster vazio (sem canais no raio)
   if (all(is.na(minmax(streams_crop)))) {
+    print(10)
     return(NULL)
   }
   
