@@ -309,4 +309,4 @@ walk(VARIAVEIS_ATIVAS, function(v) {
 # -----------------------------------------------------------------------------
 message("\n====== PIPELINE CONCLUÍDO ======")
 message(sprintf("Run:       %s", RUN_NAME))
-message(sprintf("Variáveis: %s", paste(VARIAVEIS_ATIVAS, collapse = \", \")))
+message(sprintf("Variáveis: %s", paste(VARIAVEIS_ATIVAS, collapse = ", \\")))

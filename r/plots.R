@@ -297,8 +297,8 @@ salvar_graficos <- function(graficos, image_dir, var_id) {
 
 #' Gera gráficos de tendência temporal das métricas de sazonalidade
 #'
-#' Cria um painel com a evolução temporal da Amplitude e do Centro de Massa
-#' para cada estação de uma determinada variável.
+#' Cria um painel com a evolução temporal da Amplitude, do Centro de Massa
+#' e da Duração da Seca para cada estação.
 #'
 #' @param df_sazonal    tibble com os dados anuais calculados de sazonalidade.
 #' @param cfg           Lista de configuração da variável (de VARIABLE_CONFIGS).
@@ -312,9 +312,8 @@ gerar_graficos_sazonalidade <- function(df_sazonal, cfg) {
   graficos <- list()
   
   # ---------------------------------------------------------------------------
-  # G1: Evolução do Centro de Massa (Timing do Rio)
+  # G1: Evolução do Centro de Massa (Timing do Rio / Ritmo da Chuva)
   # ---------------------------------------------------------------------------
-  # Mostra se o "peso" do rio está se deslocando no calendário ao longo dos anos
   graficos$plot_centro_massa <- ggplot(df_sazonal, aes(x = hydro_year, y = centro_massa)) +
     geom_line(aes(group = station_code), color = "gray70", alpha = 0.5) +
     geom_point(color = "#4575b4", alpha = 0.6, size = 1.5) +
@@ -336,7 +335,6 @@ gerar_graficos_sazonalidade <- function(df_sazonal, cfg) {
   # ---------------------------------------------------------------------------
   # G2: Evolução da Amplitude Relativa (Extremos de Cheia/Seca)
   # ---------------------------------------------------------------------------
-  # Mostra se a sazonalidade está ficando mais severa (rios variando mais)
   graficos$plot_amplitude <- ggplot(df_sazonal, aes(x = hydro_year, y = amplitude_rel)) +
     geom_line(aes(group = station_code), color = "gray70", alpha = 0.5) +
     geom_point(color = "#313695", alpha = 0.6, size = 1.5) +
@@ -354,6 +352,30 @@ gerar_graficos_sazonalidade <- function(df_sazonal, cfg) {
       strip.background = element_rect(fill = "gray95", color = NA),
       panel.grid.minor = element_blank()
     )
+  
+  # ---------------------------------------------------------------------------
+  # G3: Evolução da Duração da Seca (Dias Consecutivos Críticos)
+  # ---------------------------------------------------------------------------
+  # Mostra se o período severo de estiagem está se arrastando por mais tempo
+  if ("duracao_seca_q90" %in% names(df_sazonal)) {
+    graficos$plot_duracao_seca <- ggplot(df_sazonal, aes(x = hydro_year, y = duracao_seca_q90)) +
+      geom_line(aes(group = station_code), color = "gray70", alpha = 0.5) +
+      geom_point(color = "#d6604d", alpha = 0.6, size = 1.5) +
+      geom_smooth(method = "lm", color = "#7f0000", se = FALSE, linewidth = 0.8) +
+      facet_wrap(~station_code, scales = "free_y") +
+      theme_minimal(base_size = 11) +
+      labs(
+        title    = paste("Duração dos Períodos de Seca Estrita —", cfg$label),
+        subtitle = "Número máximo de dias consecutivos no ano abaixo do limiar crítico (Q90 histórico)",
+        x        = "Ano Hidrológico",
+        y        = "Número Máximo de Dias Consecutivos",
+        caption  = "Uma tendência de alta indica que as estações secas estão ficando mais longas e ininterruptas."
+      ) +
+      theme(
+        strip.background = element_rect(fill = "gray95", color = NA),
+        panel.grid.minor = element_blank()
+      )
+  }
   
   return(graficos)
 }

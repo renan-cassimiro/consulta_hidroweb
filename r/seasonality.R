@@ -1,7 +1,7 @@
 # =============================================================================
 # SAZONALIDADE HIDROLÓGICA (Foco: Jornalismo de Dados)
 # =============================================================================
-# Adaptado para integrar ao ecossistema do pipeline do Rio Xingu/Iriri
+# Versão Corrigida: Inclui o cálculo estrito da Duração da Seca (Q90)
 # =============================================================================
 
 #' Define o ano hidrológico de forma simples
@@ -21,12 +21,19 @@ calcular_centro_massa <- function(datas, valores) {
   yday(datas[idx])
 }
 
-#' Calcula as métricas anuais para uma tabela diária
+#' Calcula as métricas anuais para uma tabela diária (INCLUI DURAÇÃO DA SECA)
 calcular_metricas_anuais <- function(df, value_col, start_month = 1, min_obs = 300) {
   valor_sym <- rlang::sym(value_col)
   
-  df |>
-    filter(!is.na(!!valor_sym)) |>
+  # Remove NAs para não quebrar os cálculos estatísticos
+  df_limpo <- df |> filter(!is.na(!!valor_sym))
+  
+  if (nrow(df_limpo) < min_obs) return(tibble())
+  
+  # Calcula o limiar Q90 histórico desta estação específica (o "fundo do poço" dela)
+  q90_threshold <- quantile(df_limpo[[value_col]], probs = 0.10, na.rm = TRUE)
+  
+  df_limpo |>
     mutate(hydro_year = definir_ano_hidrologico(date, start_month)) |>
     group_by(hydro_year) |>
     filter(n() >= min_obs) |>
@@ -41,6 +48,13 @@ calcular_metricas_anuais <- function(df, value_col, start_month = 1, min_obs = 3
       dia_max       = yday(date[which.max(!!valor_sym)]),
       dia_min       = yday(date[which.min(!!valor_sym)]),
       centro_massa  = calcular_centro_massa(date, !!valor_sym),
+      
+      # CORREÇÃO: Conta o maior número de dias consecutivos abaixo do Q90 histórico
+      duracao_seca_q90 = {
+        is_seca <- !!valor_sym < q90_threshold
+        r_le <- rle(is_seca)
+        if (any(r_le$values)) max(r_le$lengths[r_le$values]) else 0
+      },
       .groups = "drop"
     )
 }
@@ -50,11 +64,8 @@ processar_sazonalidade_pipeline <- function(cfg, var_dirs, min_obs = 300) {
   
   message(sprintf("\n>>> Extraindo Sazonalidade (Jornalismo): %s", cfg$label))
   
-  # Captura a coluna correta direto da configuração do projeto
   value_col <- cfg$value_col
-  
-  # Busca os parquets na pasta organizada oficial do run
-  arquivos <- list.files(var_dirs$org_dir, pattern = "\\.parquet$", full.names = TRUE)
+  arquivos  <- list.files(var_dirs$org_dir, pattern = "\\.parquet$", full.names = TRUE)
   
   if (length(arquivos) == 0) {
     message("Aviso: Nenhum arquivo organizado encontrado para esta variável.")
@@ -63,19 +74,23 @@ processar_sazonalidade_pipeline <- function(cfg, var_dirs, min_obs = 300) {
   
   resultados <- vector("list", length(arquivos))
   
+  # REGRA JORNALÍSTICA DE ANO HIDROLÓGICO:
+  # Para Vazão/Cota no Iriri, a seca bate forte em Setembro/Outubro.
+  # Começar o ano em Novembro (11) evita cortar a seca ao meio na virada do ano civil.
+  # Para Chuva (precipitation), mantemos o ano civil clássico (1).
+  start_month <- if (cfg$id == "precipitation") 1 else 11
+  
   for (i in seq_along(arquivos)) {
     arq <- arquivos[i]
     estacao <- tools::file_path_sans_ext(basename(arq))
     
     dados <- read_parquet(arq)
-    
     if (!("date" %in% names(dados)) || !(value_col %in% names(dados))) next
     
-    # Chuva usa ano civil (start = 1). Vazão/Cota podem usar 1 ou mês da cheia se preferir.
     metrica <- calcular_metricas_anuais(
       dados, 
       value_col = value_col, 
-      start_month = 1, 
+      start_month = start_month, 
       min_obs = min_obs
     )
     
@@ -101,6 +116,7 @@ gerar_assinatura_sazonal <- function(df_metricas) {
       dia_max      = median(dia_max, na.rm = TRUE),
       dia_min      = median(dia_min, na.rm = TRUE),
       centro_massa = median(centro_massa, na.rm = TRUE),
+      duracao_seca = median(duracao_seca_q90, na.rm = TRUE), # Incluído na assinatura média
       n_anos       = n(),
       .groups = "drop"
     )
