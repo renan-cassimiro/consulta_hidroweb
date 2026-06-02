@@ -68,6 +68,7 @@ source(here::here("R/analysis.R"))     # analisar_estacao(), analisar_todas_esta
 source(here::here("R/summary.R"))      # build_tabela_resumo(), build_dados_empilhados()
 source(here::here("R/plots.R"))        # gerar_graficos(), salvar_graficos()
 source(here::here("R/consolidate.R"))  # consolidar_resultados(), salvar_consolidado()
+source(here::here("R/report.R"))          # renderizar_todos()
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DO RUN
@@ -118,7 +119,6 @@ ggplot() +
 # Cada elemento de `resultados_por_variavel` contém:
 #   $cfg, $inventario, $dados_selecionados, $resultados,
 #   $tabela_resumo, $dados_empilhados, $graficos (se GERAR_GRAFICOS_TENDENCIA)
-
 resultados_por_variavel <- map(
   VARIABLE_CONFIGS[VARIAVEIS_ATIVAS],
   function(cfg) {
@@ -228,8 +228,27 @@ if (!is.null(analysed_stations)) {
               paste(VARIAVEIS_ATIVAS, collapse = ", ")))
 }
 
+
 # -----------------------------------------------------------------------------
-# 7. VERIFICAÇÃO FINAL
+# 7. RELATÓRIOS PDF
+# -----------------------------------------------------------------------------
+# Requer LaTeX. Para instalar: tinytex::install_tinytex()
+# Gera: report/relatorio_{variavel}.pdf  (um por variável)
+#        report/relatorio_consolidado_{run_name}.pdf
+GERAR_RELATORIOS <- TRUE
+
+if (GERAR_RELATORIOS) {
+  message("\n====== GERANDO RELATÓRIOS PDF ======")
+  renderizar_todos(
+    resultados_por_variavel = resultados_por_variavel,
+    consolidado             = consolidado,
+    run_name                = RUN_NAME,
+    dirs                    = dirs
+  )
+}
+
+# -----------------------------------------------------------------------------
+# 8. VERIFICAÇÃO FINAL
 # -----------------------------------------------------------------------------
 message("\n====== PIPELINE CONCLUÍDO ======")
 message(sprintf("Run:       %s", RUN_NAME))
@@ -246,3 +265,4 @@ message(sprintf(
   ncol(consolidado$wide),
   if (!is.null(consolidado$spatial)) paste(nrow(consolidado$spatial), "feições") else "não gerado"
 ))
+

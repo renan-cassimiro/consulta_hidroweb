@@ -70,9 +70,9 @@ gerar_graficos <- function(tabela_resumo,
     mutate(label = paste0(
       round(slope_sen, 2),
       case_when(
-        tendencia == "Positiva" ~ " ▲",
-        tendencia == "Negativa" ~ " ▼",
-        .default                = " ○"
+        tendencia == "Positiva" ~ " (+)",
+        tendencia == "Negativa" ~ " (-)",
+        .default                = " (~)"
       )
     ))
   
@@ -96,7 +96,7 @@ gerar_graficos <- function(tabela_resumo,
     labs(
       title    = paste("Tendência de", var_label, "por estação"),
       subtitle = paste0(
-        "Valores em ", unit_label, "/ano | ▲ positivo ▼ negativo ○ não significativo"
+        "Valores em ", unit_label, "/ano | (+) positivo  (-) negativo  (~) nao significativo"
       ),
       x    = "Estação",
       y    = paste0("Tendência (", unit_label, "/ano)"),
@@ -117,9 +117,9 @@ gerar_graficos <- function(tabela_resumo,
         station_code, "\n",
         round(slope_sen, 2), " ", unit_label, "/ano | p = ", round(p_valor_mk, 4),
         case_when(
-          tendencia == "Negativa" ~ " ▼",
-          tendencia == "Positiva" ~ " ▲",
-          .default                = " ○"
+          tendencia == "Negativa" ~ " (-)",
+          tendencia == "Positiva" ~ " (+)",
+          .default                = " (~)"
         )
       )
     )
@@ -134,7 +134,7 @@ gerar_graficos <- function(tabela_resumo,
     scale_color_manual(values = CORES_TENDENCIA, name = "Tendência") +
     labs(
       title    = paste("Tendência de", var_label, "por estação — Bacia Amazônica"),
-      subtitle = "Série original (cinza) | Colorido = tendência STL | ▼ Negativa ▲ Positiva ○ Não significativa",
+      subtitle = "Serie original (cinza) | Colorido = tendencia STL | (-) Negativa  (+) Positiva  (~) Nao significativa",
       x        = "Data",
       y        = paste0(var_label, " (", unit_label, ")")
     ) +
@@ -200,7 +200,7 @@ gerar_graficos <- function(tabela_resumo,
     labs(
       title = paste("Distribuição de tendências —", var_label),
       x     = NULL,
-      y     = "Nº de estações"
+      y     = "Número de estações"
     ) +
     theme_bw(base_size = 14) +
     theme(panel.grid.major.x = element_blank())
@@ -237,7 +237,7 @@ gerar_graficos <- function(tabela_resumo,
     geom_sf(data = estacoes_map, aes(color = tendencia, size = abs_tau)) +
     scale_color_manual(values = CORES_TENDENCIA, name = "Tendência") +
     scale_size_continuous(
-      name   = "|τ Mann-Kendall|",
+      name   = "|tau Mann-Kendall|",
       range  = c(1.5, 6),
       breaks = c(0.1, 0.2, 0.3, 0.4)
     ) +
@@ -247,7 +247,7 @@ gerar_graficos <- function(tabela_resumo,
     ) +
     labs(
       title    = paste("Direção e força da tendência —", var_label),
-      subtitle = "Cor = categoria | Tamanho = |τ|"
+      subtitle = "Cor = categoria | Tamanho = |tau|"
     ) +
     tema_mapa
   
