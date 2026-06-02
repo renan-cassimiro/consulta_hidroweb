@@ -1,316 +1,312 @@
 # =============================================================================
-# ANÁLISE HIDROLÓGICA DE TENDÊNCIAS — BACIA AMAZÔNICA
+# ANÁLISE DE DISPONIBILIDADE E TENDÊNCIAS HIDROLÓGICAS — PIPELINE PRINCIPAL
 # =============================================================================
-# 
+#
 # Autor:   Renan Cassimiro Brito
 # Data:    2026-05-13
-# 
-# Descrição:
-#   Pipeline principal de análise hidrológica. Obtém dados de vazão de estações
-#   fluviométricas via API HidroWeb (ANA), aplica testes estatísticos de
-#   tendência (Mann-Kendall, Sen, Pettitt) e gera relatório PDF com visualizações.
 #
-# Fluxo:
-#   1. Leitura da área de estudo e estações pré-selecionadas
-#   2. Download do inventário e dados via {hydrobr}
-#   3. Seleção de estações por critérios de qualidade
-#   4. Análise estatística por estação (analisar_estacao)
-#   5. Geração de tabela resumo e gráficos (gerar_graficos)
-#   6. Renderização do relatório PDF via RMarkdown
+# Descrição:
+#   Orquestrador do pipeline de análise hidrológica da ANA.
+#   Executa as três variáveis (vazão, cota, precipitação) em sequência usando
+#   funções genéricas e consolida os resultados num único artefato espacial.
+#
+# Sequência de execução:
+#   [x] 1. Setup de diretórios e configurações
+#   [x] 2. Leitura da área de estudo e camadas geográficas
+#   [x] 3. Para cada variável (discharge / water_level / precipitation):
+#          a. Inventário de estações via API HidroWeb
+#          b. Download + organização das séries
+#          c. Seleção por critérios de qualidade
+#          d. Análise estatística (STL, Mann-Kendall, Sen, Pettitt)
+#          e. Tabela resumo + gráficos de tendência
+#          f. Exportação dos gráficos de disponibilidade
+#   [x] 4. Consolidação: long + wide + spatial (camada analítica final)
+#   [ ] 5. Conectividade hidrológica (DEM → rede → igraph) — etapa futura
+#   [ ] 6. Moran global + LISA                             — etapa futura
+#   [ ] 7. Regionalização (PCA + clustering)               — etapa futura
+#   [ ] 8. Sazonalidade hidrológica                        — etapa futura
+#   [ ] 9. CHIRPS (tendência + anomalias precipitação)     — etapa futura
+#   [ ] 10. Chuva × vazão (elasticidade + residual)        — etapa futura
+#   [ ] 11. Pressão territorial (desmatamento + fogo)      — etapa futura
 #
 # Inputs:
-#   resources/hybas_lake_sa_lev03_v1c_bacia_amazonica.gpkg  — polígono da bacia
-#   resources/dourada_geoft_estacao_hidrometeorologica_filtradas.gpkg — estações
-#   resources/ne_10m_rivers_lake_centerlines_amazonia.gpkg  — hidrografia
-#   resources/AMACRO/AMACRO.shp                             — região AMACRO
+#   input/{RUN_NAME}/
+#   ├── {RUN_NAME}_area_estudo.gpkg
+#   ├── ne_10m_rivers_lake_centerlines_bacias_amacro.gpkg  (opcional)
+#   └── AMACRO/AMACRO.shp                                  (opcional)
 #
 # Outputs:
-#   output/refactor_test/data/          — objetos RDS intermediários
-#   output/refactor_test/images/        — gráficos PNG (via ggsave, comentados)
-#   output/refactor_test/report/        — relatório PDF final
-#   output/refactor_test/resumo_tendencias_mensal.csv
+#   output/{RUN_NAME}/
+#   ├── data/
+#   │   ├── {RUN_NAME}_inventario_{variable}.parquet
+#   │   ├── stations_{variable}/           — séries brutas por estação
+#   │   └── stations_{variable}_organized/ — séries organizadas
+#   ├── images/
+#   │   ├── disponibilidade_{variable}.png
+#   │   ├── tendencias_estacoes_{variable}.png
+#   │   ├── mapa_tendencias_classificadas_{variable}.png
+#   │   └── ...
+#   ├── consolidated/
+#   │   ├── {RUN_NAME}_disponibilidade_long.parquet
+#   │   ├── {RUN_NAME}_disponibilidade_wide.parquet
+#   │   └── {RUN_NAME}_disponibilidade_spatial.parquet
+#   └── resumo_disponibilidade_{variable}.parquet
 #
 # Dependências:
-#   CRAN: fs, here, Kendall, lubridate, openxlsx, patchwork, scales,
-#         sf, tidyverse, trend, zyp, zoo
-#   GitHub: hydroversebr/hydrobr
-#     # install_github("hydroversebr/hydrobr", build_vignettes = FALSE)
-#
-# TODO: Melhorar gráfico de apresentação inicial (incluir camada de rios e estados)
-# TODO: Cruzar códigos das estações com camada de rios/bacias para filtragem
-#       geográfica antes de chamar as funções do hydrobr
-# TODO: Aplicar filtro antes do download (atualmente feito após, para teste offline)
-# TODO: Aplicar análises temporais disponíveis no pacote hydrobr
-# TODO: Interface Shiny para seleção interativa de estações e bacias
+#   CRAN: arrow, fs, here, hydrobr, Kendall, lubridate, patchwork, purrr,
+#         scales, sf, sfarrow, tidyverse, trend, zyp, zoo
+#   GitHub: devtools::install_github("hydroversebr/hydrobr", build_vignettes = FALSE)
 # =============================================================================
 
-# if (!require(devtools)) install.packages("devtools")
-# library(devtools)
-# install_github("hydroversebr/hydrobr", build_vignettes = FALSE)
+# -----------------------------------------------------------------------------
+# 0. MÓDULOS DO PROJETO
+# -----------------------------------------------------------------------------
+source(here::here("config/variable_configs.R"))
+source(here::here("R/setup.R"))        # setup_dirs() + bibliotecas
+source(here::here("R/inventory.R"))    # obter_inventario(), baixar_e_organizar(), selecionar_estacoes()
+source(here::here("R/analysis.R"))     # analisar_estacao(), analisar_todas_estacoes()
+source(here::here("R/summary.R"))      # build_tabela_resumo(), build_dados_empilhados()
+source(here::here("R/plots.R"))        # gerar_graficos(), salvar_graficos()
+source(here::here("R/consolidate.R"))  # consolidar_resultados(), salvar_consolidado()
+source(here::here("R/report.R"))          # renderizar_todos()
+source(here::here("R/seasonality.R"))
 
-library(arrow)
-library(fs)
-library(here)
-library(hydrobr)
-library(kableExtra)
-library(Kendall)
-library(lubridate)
-library(openxlsx)
-library(patchwork)
-library(purrr)
-library(scales)
-library(sf)
-library(sfarrow)
-library(tidyverse)
-library(trend)
-library(zyp)
-library(zoo)
-
-source(here("functions/functions.R"))
 
 # -----------------------------------------------------------------------------
-# Diretórios do projeto (todos relativos à raiz via {here})
+# 1. CONFIGURAÇÃO DO RUN
 # -----------------------------------------------------------------------------
+RUN_NAME <- "xingu_river"
 
-RUN_NAME <- "amacro"
+# Variáveis a processar — subconjunto de VARIABLE_CONFIGS.
+# Para rodar só precipitação: VARIAVEIS_ATIVAS <- c("precipitation")
+VARIAVEIS_ATIVAS <- c("discharge", "water_level", "precipitation")
 
-INPUT_DIR <- here("input", RUN_NAME)
-STUDAY_AREA_PATH <- path(INPUT_DIR, "bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")
+# Filtro de estações: NULL usa todas do inventário.
+# Para filtrar: estacoes_filtradas <- st_read(path(dirs$input_dir, "estacoes.gpkg"))
+ESTACOES_FILTRADAS <- NULL
 
-OUTPUT_DIR <- here("output", RUN_NAME)
-
-REPORT_DIR    <- path(OUTPUT_DIR, "report")
-IMAGE_DIR     <- path(OUTPUT_DIR, "images")
-DATA_DIR      <- path(OUTPUT_DIR, "data")
-
-STATIONS_DISCHARGE_DIR <- path(DATA_DIR, "stations_discharge")
-STATIONS_DISCHARGE_ORG_DIR <- path(DATA_DIR, "stations_discharge_organized")
-STATIONS_WATER_LEVEL_DIR <- path(DATA_DIR, "stations_water_level")
-STATIONS_WATER_LEVEL_ORG_DIR <- path(DATA_DIR, "stations_water_level_organized")
-
-INVENTARIO_PATH <- path(DATA_DIR, paste0(RUN_NAME, "_inventario.parquet"))
-
-dir.create(DATA_DIR)
-dir.create(RUN_NAME)
-dir.create(IMAGE_DIR)
-dir.create(REPORT_DIR)
-dir.create(STATIONS_DISCHARGE_DIR)
-dir.create(STATIONS_DISCHARGE_ORG_DIR)
-dir.create(STATIONS_WATER_LEVEL_DIR)
-dir.create(STATIONS_WATER_LEVEL_ORG_DIR)
+# Controla se gera e salva os gráficos de tendência (pode ser lento para muitas estações)
+GERAR_GRAFICOS_TENDENCIA <- TRUE
 
 # -----------------------------------------------------------------------------
-# 1. ÁREA DE ESTUDO E ESTAÇÕES
+# 2. SETUP DE DIRETÓRIOS
 # -----------------------------------------------------------------------------
-area_estudo <- st_read(STUDAY_AREA_PATH)
-
-# Defina estacoes_filtradas <- NULL para usar todas as estações do inventário
-#estacoes_filtradas <- st_read(path(INPUT_DIR,
-#                                   "dourada_geoft_estacao_hidrometeorologica_filtradas.gpkg"))
-estacoes_filtradas <- NULL
+dirs <- setup_dirs(RUN_NAME)
 
 # -----------------------------------------------------------------------------
-# 2. INVENTÁRIO DE ESTAÇÕES FLUVIOMÉTRICAS
+# 3. LEITURA DAS CAMADAS GEOGRÁFICAS
 # -----------------------------------------------------------------------------
+area_estudo <- st_read(dirs$study_area_path, quiet = TRUE)
 
-# Consulta o inventário da ANA para estações do tipo fluviométrico (flu)
-# dentro do polígono da área de estudo
-inventario <- inventory(stationType = "flu", as_sf = TRUE, aoi = area_estudo)
+# Camadas opcionais — se ausentes, os mapas são gerados sem elas
+rios_path   <- path(dirs$input_dir, "ne_10m_rivers_lake_centerlines_bacias_amacro.gpkg")
+amacro_path <- path(dirs$input_dir, "AMACRO", "AMACRO.shp")
 
+rios   <- if (file_exists(rios_path))   st_read(rios_path,   quiet = TRUE) else NULL
+amacro <- if (file_exists(amacro_path)) st_read(amacro_path, quiet = TRUE) else NULL
 
-# Aplica filtro por estações pré-selecionadas (quando fornecidas)
-if (!is.null(estacoes_filtradas)) {
-  inventario <- inventario |>
-    filter(station_code %in% estacoes_filtradas$CodigoEstacao)
-}
- 
-# Para gravar dados geométricos
-st_write_parquet(inventario, INVENTARIO_PATH, compression = "zstd")
+if (is.null(rios))   message("Aviso: camada de rios não encontrada — mapas gerados sem hidrografia.")
+if (is.null(amacro)) message("Aviso: camada AMACRO não encontrada — G5 gerado sem polígono AMACRO.")
 
-# Mapa rápido de conferência do inventário
+# Mapa rápido de conferência da área de estudo
 ggplot() +
-  geom_sf(data = inventario) +
-  geom_sf(data = area_estudo, fill = NA, color = "red") +
-  theme_classic()
+  geom_sf(data = area_estudo, fill = NA, color = "red", linewidth = 1) +
+  { if (!is.null(rios)) geom_sf(data = rios, color = "steelblue", linewidth = 0.4) } +
+  theme_classic() +
+  labs(title = paste("Área de estudo —", RUN_NAME))
 
 # -----------------------------------------------------------------------------
-# 3. DOWNLOAD E ORGANIZAÇÃO DOS DADOS
+# 4. PIPELINE POR VARIÁVEL
 # -----------------------------------------------------------------------------
-##TODO Colocar condição se é pra baixar dados de vazão ou de nível da água
-# Baixa as séries históricas de vazão de todas as estações do inventário
-dados_inventario <- stationsData(inventoryResult = inventario, waterLevel = FALSE)
-walk2(dados_inventario, 
-      names(dados_inventario), 
-      ~ write_parquet(.x, path(STATIONS_DISCHARGE_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-# Organiza os dados no formato padrão do {hydrobr}
-dados_inventario_organizado <- organize(dados_inventario)
-walk2(dados_inventario_organizado, 
-      names(dados_inventario_organizado), 
-      ~ write_parquet(.x, path(STATIONS_DISCHARGE_ORG_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-
-
-# Baixa as séries históricas de nível  de todas as estações do inventário
-dados_inventario <- stationsData(inventoryResult = inventario, waterLevel = TRUE)
-walk2(dados_inventario, 
-      names(dados_inventario), 
-      ~ write_parquet(.x, path(STATIONS_WATER_LEVEL_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-# Organiza os dados no formato padrão do {hydrobr}
-dados_inventario_organizado <- organize(dados_inventario)
-walk2(dados_inventario_organizado, 
-      names(dados_inventario_organizado), 
-      ~ write_parquet(.x, path(STATIONS_WATER_LEVEL_ORG_DIR, paste0(RUN_NAME, "_", .y, ".parquet")), compression = "zstd"))
-
-# ----e-------------------------------------------------------------------------
-# 4. SELEÇÃO DE ESTAÇÕES POR CRITÉRIOS DE QUALIDADE
-# -----------------------------------------------------------------------------
-# Critérios aplicados:
-#   mode        = "yearly"  — agrega por ano hidrológico
-#   maxMissing  = 5         — máximo de 5% de dados faltantes por ano
-#   minYears    = 10        — mínimo de 10 anos com dados válidos
-#   month       = 1         — mês de início do ano hidrológico (janeiro)
-#   iniYear/finYear         — janela temporal de interesse
-#   consistedOnly = FALSE   — inclui dados não consistidos
-# -----------------------------------------------------------------------------
-
-dadosestacoes_selecionadas <- selectStations(
-  organizeResult = dados_inventario_organizado,
-    mode           = "yearly",
-    maxMissing     = 100,
-    minYears       = 5,
-    month          = 1,
-    iniYear        = 2010,
-    finYear        = 2026,
-    consistedOnly  = FALSE
-  )
-
-# -----------------------------------------------------------------------------
-# 5. ANÁLISE ESTATÍSTICA POR ESTAÇÃO
-# -----------------------------------------------------------------------------
-# analisar_estacao() é definida em functions/functions.R
-# Retorna lista com: Mann-Kendall, Yue-Pilon, slope de Sen, Pettitt,
-# decomposição STL, anomalias e extremos para cada estação.
-
-resultados <- map2(
-  dadosestacoes_selecionadas$series,
-  names(dadosestacoes_selecionadas$series),
-  analisar_estacao
-)
-
-# -----------------------------------------------------------------------------
-# 6. TABELA RESUMO
-# -----------------------------------------------------------------------------
-tabela_resumo <- map_dfr(resultados, function(x) {
-  tibble(
-    station_code    = x$station_code,
-    tau_mk          = round(x$mann_kendall$tau, 2),
-    p_valor_mk      = round(x$mann_kendall$sl, 2),
-    slope_sen       = round(as.numeric(x$sens_slope$estimates), 2),
-    p_valor_sen     = round(x$sens_slope$p.value, 2),
-    ponto_mudanca   = round(x$pettitt$estimate, 2),
-    p_valor_pettitt = x$pettitt$p.value,
-    n_anomalias     = x$n_anomalias,
-    n_extremos      = x$n_extremos,
-    # Classificação: significativo (p < 0.05) e direção do slope de Sen
-    tendencia       = case_when(
-      x$mann_kendall$sl < 0.05 & x$sens_slope$estimates < 0 ~ "Negativa",
-      x$mann_kendall$sl < 0.05 & x$sens_slope$estimates > 0 ~ "Positiva",
-      .default = "Não significativa"
+# Cada elemento de `resultados_por_variavel` contém:
+#   $cfg, $inventario, $dados_selecionados, $resultados,
+#   $tabela_resumo, $dados_empilhados, $graficos (se GERAR_GRAFICOS_TENDENCIA)
+resultados_por_variavel <- map(
+  VARIABLE_CONFIGS[VARIAVEIS_ATIVAS],
+  function(cfg) {
+    
+    message(sprintf("\n====== %s ======", toupper(cfg$label)))
+    
+    var_dirs <- dirs$vars[[cfg$id]]
+    
+    # -- 4a. Inventário --------------------------------------------------------
+    inventario <- obter_inventario(
+      cfg                = cfg,
+      area_estudo        = area_estudo,
+      output_path        = var_dirs$inventario,
+      estacoes_filtradas = ESTACOES_FILTRADAS
     )
-  )
-})
-
-print(tabela_resumo)
-write_parquet(tabela_resumo, path(OUTPUT_DIR, "resumo_tendencias_mensal.parquet"))
-
-# -----------------------------------------------------------------------------
-# 7. DADOS EMPILHADOS PARA GRÁFICOS DE SÉRIE TEMPORAL
-# -----------------------------------------------------------------------------
-# Combina as séries de todas as estações em um único data.frame longo,
-# mantendo a coluna station_code para identificação nos facets
-dados_empilhados <- map_dfr(resultados, function(x) {
-  x$dados |> mutate(station_code = x$station_code)
-})
-
-# -----------------------------------------------------------------------------
-# 8. GERAÇÃO DE GRÁFICOS
-# -----------------------------------------------------------------------------
-# gerar_graficos() retorna lista com os objetos ggplot:
-#   $tendencias_estacoes          — barplot de slope por estação
-#   $tendencias_classificadas     — facets com série + tendência STL
-#   $mapa_tendencias_classificadas — mapa simples por categoria
-#   $contagens_tendencia          — barplot de frequência de tendência
-#   $mapa_tendencia_hidrologica   — mapa com |τ| e camadas geográficas
-
-graficos <- gerar_graficos(tabela_resumo, dados_empilhados, inventario)
-
-# Adiciona o gráfico de disponibilidade gerado pelo selectStations()
-graficos$disponibilidade <- dadosestacoes_selecionadas$plot
-
-# Exportar gráficos individualmente (descomentar conforme necessário)
-# ggsave(path(IMAGE_DIR, "disponibilidade_estacoes.png"),        graficos$disponibilidade,              width = 10, height = 8,  dpi = 300)
-# ggsave(path(IMAGE_DIR, "tendencias_estacoes.png"),             graficos$tendencias_estacoes,          width = 10, height = 8,  dpi = 300)
-# ggsave(path(IMAGE_DIR, "mapa_tendencias_classificadas.png"),   graficos$mapa_tendencias_classificadas, width = 16, height = 12, dpi = 300)
-# ggsave(path(IMAGE_DIR, "contagens_tendencia.png"),             graficos$contagens_tendencia,          width = 12, height = 5,  dpi = 150)
-# ggsave(path(IMAGE_DIR, "mapas_tematicos.png"),                 graficos$mapa_tendencia_hidrologica,   width = 8,  height = 16, dpi = 150)
-
-# -----------------------------------------------------------------------------
-# 9. RENDERIZAÇÃO DO RELATÓRIO PDF
-# -----------------------------------------------------------------------------
-# Os objetos gráficos são passados via `params` para o RMarkdown,
-# evitando dependência de variáveis globais no ambiente de renderização.
-
-rmarkdown::render(
-  input         = path("relatorio.Rmd"),
-  output_format = "pdf_document",
-  output_dir    = REPORT_DIR,
-  params        = list(graficos = graficos),
-  envir         = new.env(parent = globalenv())
+    
+    # -- 4b. Download + organização -------------------------------------------
+    dados_org <- baixar_e_organizar(
+      cfg        = cfg,
+      inventario = inventario,
+      run_name   = RUN_NAME,
+      raw_dir    = var_dirs$raw_dir,
+      org_dir    = var_dirs$org_dir
+    )
+    
+    # -- 4c. Seleção por qualidade --------------------------------------------
+    estacoes_sel <- selecionar_estacoes(cfg, dados_org)
+    
+    # -- 4d. Análise estatística ----------------------------------------------
+    resultados <- analisar_todas_estacoes(estacoes_sel, cfg)
+    
+    # -- 4e. Tabela resumo + séries empilhadas --------------------------------
+    tabela_resumo    <- build_tabela_resumo(resultados, cfg)
+    dados_empilhados <- build_dados_empilhados(resultados)
+    
+    write_parquet(tabela_resumo, var_dirs$resumo)
+    message(sprintf("[%s] Resumo salvo: %d estações", cfg$label, nrow(tabela_resumo)))
+    
+    # -- 4f. Gráficos de disponibilidade --------------------------------------
+    img_disp <- path(dirs$image_dir, paste0("disponibilidade_", cfg$id, ".png"))
+    ggsave(img_disp, estacoes_sel$plot, width = 14, height = 8, dpi = 150)
+    message(sprintf("[%s] Disponibilidade salva: %s", cfg$label, img_disp))
+    
+    # -- 4g. Gráficos de tendência (opcional) ---------------------------------
+    graficos <- NULL
+    
+    if (GERAR_GRAFICOS_TENDENCIA) {
+      message(sprintf("[%s] Gerando gráficos de tendência...", cfg$label))
+      
+      graficos <- gerar_graficos(
+        tabela_resumo    = tabela_resumo,
+        dados_empilhados = dados_empilhados,
+        inventario       = inventario,
+        area_estudo      = area_estudo,
+        cfg              = cfg,
+        rios             = rios,
+        amacro           = amacro
+      )
+      
+      # Adiciona plot de disponibilidade à lista de gráficos
+      graficos$disponibilidade <- estacoes_sel$plot
+      
+      salvar_graficos(graficos, dirs$image_dir, cfg$id)
+    }
+    
+    list(
+      cfg              = cfg,
+      inventario       = inventario,
+      dados_selecionados = estacoes_sel,
+      resultados       = resultados,
+      tabela_resumo    = tabela_resumo,
+      dados_empilhados = dados_empilhados,
+      graficos         = graficos
+    )
+  }
 )
 
-#TODO - Fazendo análise hidrológica integrada
-#=============================================================================
-  # ETAPA 1 — BASE HIDROLÓGICA ESPACIAL
-  # =============================================================================
-#
-# Autor:   Renan Cassimiro Brito
-# Data:    2026-05-21
-#
-# Descrição:
-#   Cria a camada analítica principal do projeto: um objeto sf com geometria
-#   de ponto por estação, contendo todos os atributos estatísticos da análise
-#   de tendência e classificação hidrológica mínima de conectividade.
-#
-#   Essa camada é a unidade espacial base para todas as etapas seguintes
-#   (Moran, sazonalidade, clima, fatores externos).
-#
-# Inputs:
-#   inventario      — objeto sf já carregado no ambiente (main.R)
-#   tabela_resumo   — data.frame com métricas de tendência (main.R)
-#   resources/ne_10m_rivers_lake_centerlines_amazonia.gpkg — hidrografia
-#
-# Outputs:
-#   data/estacoes_analise.gpkg     — camada analítica final (GeoPackage)
-#   data/estacoes_analise.parquet  — cópia em parquet para análises tabulares
-#
-# Dependências: sf, sfarrow, dplyr, here, fs (carregadas no main.R)
-# =============================================================================
+# -----------------------------------------------------------------------------
+# 5. CONSOLIDAÇÃO DOS RESULTADOS
+# -----------------------------------------------------------------------------
+message("\n====== CONSOLIDANDO RESULTADOS ======")
+
+resumos_list     <- map(resultados_por_variavel, "tabela_resumo")
+inventarios_list <- map(resultados_por_variavel, "inventario")
+
+consolidado <- consolidar_resultados(
+  resumos_list    = resumos_list,
+  inventario_list = inventarios_list
+)
+
+salvar_consolidado(consolidado, dirs$consolidated_dir, RUN_NAME)
 
 # -----------------------------------------------------------------------------
-# 1. CAMADA ANALÍTICA — junção espacial + atributos de tendência
+# 6. CAMADA ANALÍTICA ESPACIAL (analysed_stations)
 # -----------------------------------------------------------------------------
-analysed_stations  <- inventario |>
-  # Mantém apenas colunas relevantes do inventário
-  select(station_code, name, area_km2, lat, long, geometry) |>
-  # Junta todos atributos da análise de tendência (left_join pode descartar a classe em alguns casos)
-  left_join(tabela_resumo, by="station_code") |> 
-  st_as_sf()
+# O objeto `consolidado$spatial` já é o sf consolidado (wide + geometria).
+# Esta etapa apenas reporta e salva uma cópia nomeada para uso nas etapas
+# futuras (Moran, regionalização, conectividade, etc.)
 
-# Verificação rápida
-glimpse(analysed_stations)
-cat("\nEstações na camada analítica:", nrow(analysed_stations), "\n")
-cat("CRS:", st_crs(analysed_stations)$input, "\n")
-st_write_parquet(analysed_stations, path(DATA_DIR, "analysed_stations.parquet"))
+analysed_stations <- consolidado$spatial
 
+if (!is.null(analysed_stations)) {
+  glimpse(analysed_stations)
+  cat(sprintf("\nEstações na camada analítica: %d\n", nrow(analysed_stations)))
+  cat(sprintf("CRS: %s\n", st_crs(analysed_stations)$input))
+  cat(sprintf("Variáveis consolidadas: %s\n",
+              paste(VARIAVEIS_ATIVAS, collapse = ", ")))
+}
+
+
+# -----------------------------------------------------------------------------
+# 7. RELATÓRIOS PDF
+# -----------------------------------------------------------------------------
+# Requer LaTeX. Para instalar: tinytex::install_tinytex()
+# Gera: report/relatorio_{variavel}.pdf  (um por variável)
+#        report/relatorio_consolidado_{run_name}.pdf
+GERAR_RELATORIOS <- TRUE
+
+if (GERAR_RELATORIOS) {
+  message("\n====== GERANDO RELATÓRIOS PDF ======")
+  renderizar_todos(
+    resultados_por_variavel = resultados_por_variavel,
+    consolidado             = consolidado,
+    run_name                = RUN_NAME,
+    dirs                    = dirs
+  )
+}
+
+# -----------------------------------------------------------------------------
+# 8. VERIFICAÇÃO FINAL
+# -----------------------------------------------------------------------------
+message("\n====== PIPELINE CONCLUÍDO ======")
+message(sprintf("Run:       %s", RUN_NAME))
+message(sprintf("Variáveis: %s", paste(VARIAVEIS_ATIVAS, collapse = ", ")))
+
+walk(VARIAVEIS_ATIVAS, function(v) {
+  n <- nrow(resultados_por_variavel[[v]]$tabela_resumo)
+  message(sprintf("  %-15s → %d estações com análise", v, n))
+})
+
+message(sprintf(
+  "Consolidado — long: %d linhas | wide: %d colunas | spatial: %s",
+  nrow(consolidado$long),
+  ncol(consolidado$wide),
+  if (!is.null(consolidado$spatial)) paste(nrow(consolidado$spatial), "feições") else "não gerado"
+))
+
+# -----------------------------------------------------------------------------
+# 9. ANÁLISE DE SAZONALIDADE HIDROLÓGICA (MÓDULO JORNALÍSTICO)
+# -----------------------------------------------------------------------------
+message("\n====== PROCESSANDO SAZONALIDADE JORNALÍSTICA ENRIQUECIDA ======")
+
+# Loop dinâmico pelas variáveis ativas (vazão, cota, chuva)
+walk(VARIAVEIS_ATIVAS, function(v) {
+  cfg      <- VARIABLE_CONFIGS[[v]]
+  var_dirs <- dirs$vars[[v]]
+  
+  # 1. Executa o processamento matemático por estação/ano
+  df_sazonal <- processar_sazonalidade_pipeline(cfg, var_dirs)
+  
+  if (!is.null(df_sazonal) && nrow(df_sazonal) > 0) {
+    
+    # 2. Gera a assinatura histórica resumida (médias históricas)
+    df_assinatura <- gerar_assinatura_sazonal(df_sazonal)
+    
+    # 3. Salva os dados brutos consolidados na pasta 'consolidated/'
+    path_sazonal    <- path(dirs$consolidated_dir, paste0(RUN_NAME, "_sazonalidade_anual_", v, ".parquet"))
+    path_assinatura <- path(dirs$consolidated_dir, paste0(RUN_NAME, "_assinatura_sazonal_media_", v, ".parquet"))
+    
+    write_parquet(df_sazonal,    path_sazonal)
+    write_parquet(df_assinatura, path_assinatura)
+    
+    # 4. GERAÇÃO E SALVAMENTO DAS VISUALIZAÇÕES JORNALÍSTICAS
+    message(sprintf("  [%s] Renderizando gráficos de sazonalidade...", v))
+    lista_plots <- gerar_graficos_sazonalidade(df_sazonal, cfg)
+    
+    # Salva na pasta oficial de imagens do projeto (ex: output/xingu_river/images/)
+    salvar_graficos_sazonalidade(lista_plots, dirs$image_dir, v)
+    
+    message(sprintf("  [%s] Processo concluído com sucesso!", v))
+  }
+})
+
+# -----------------------------------------------------------------------------
+# 10. VERIFICAÇÃO FINAL
+# -----------------------------------------------------------------------------
+message("\n====== PIPELINE CONCLUÍDO ======")
+message(sprintf("Run:       %s", RUN_NAME))
+message(sprintf("Variáveis: %s", paste(VARIAVEIS_ATIVAS, collapse = \", \")))

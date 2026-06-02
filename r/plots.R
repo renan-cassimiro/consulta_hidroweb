@@ -287,3 +287,98 @@ salvar_graficos <- function(graficos, image_dir, var_id) {
     message(sprintf("  Salvo: %s", img_path))
   })
 }
+
+
+# =============================================================================
+# VISUALIZAÇÕES DE SAZONALIDADE HIDROLÓGICA 
+# =============================================================================
+# Produz gráficos exploratórios para investigar mudanças de ritmo nos rios.
+# =============================================================================
+
+#' Gera gráficos de tendência temporal das métricas de sazonalidade
+#'
+#' Cria um painel com a evolução temporal da Amplitude e do Centro de Massa
+#' para cada estação de uma determinada variável.
+#'
+#' @param df_sazonal    tibble com os dados anuais calculados de sazonalidade.
+#' @param cfg           Lista de configuração da variável (de VARIABLE_CONFIGS).
+#'
+#' @return Uma lista nomeada de objetos ggplot.
+#' @export
+gerar_graficos_sazonalidade <- function(df_sazonal, cfg) {
+  
+  if (is.null(df_sazonal) || nrow(df_sazonal) == 0) return(list())
+  
+  graficos <- list()
+  
+  # ---------------------------------------------------------------------------
+  # G1: Evolução do Centro de Massa (Timing do Rio)
+  # ---------------------------------------------------------------------------
+  # Mostra se o "peso" do rio está se deslocando no calendário ao longo dos anos
+  graficos$plot_centro_massa <- ggplot(df_sazonal, aes(x = hydro_year, y = centro_massa)) +
+    geom_line(aes(group = station_code), color = "gray70", alpha = 0.5) +
+    geom_point(color = "#4575b4", alpha = 0.6, size = 1.5) +
+    geom_smooth(method = "lm", color = "#d73027", se = FALSE, linewidth = 0.8, linetype = "dashed") +
+    facet_wrap(~station_code, scales = "free_y") +
+    theme_minimal(base_size = 11) +
+    labs(
+      title    = paste("Mudança no Tempo do Fluxo (Centro de Massa) —", cfg$label),
+      subtitle = "Evolução do Dia Juliano em que 50% do volume anual passa pela estação",
+      x        = "Ano Hidrológico",
+      y        = "Dia do Ano (1 a 365)",
+      caption  = "Linha tracejada indica a tendência linear simples ao longo do período monitorado."
+    ) +
+    theme(
+      strip.background = element_rect(fill = "gray95", color = NA),
+      panel.grid.minor = element_blank()
+    )
+  
+  # ---------------------------------------------------------------------------
+  # G2: Evolução da Amplitude Relativa (Extremos de Cheia/Seca)
+  # ---------------------------------------------------------------------------
+  # Mostra se a sazonalidade está ficando mais severa (rios variando mais)
+  graficos$plot_amplitude <- ggplot(df_sazonal, aes(x = hydro_year, y = amplitude_rel)) +
+    geom_line(aes(group = station_code), color = "gray70", alpha = 0.5) +
+    geom_point(color = "#313695", alpha = 0.6, size = 1.5) +
+    geom_smooth(method = "lm", color = "#b2182b", se = FALSE, linewidth = 0.8) +
+    facet_wrap(~station_code, scales = "free_y") +
+    theme_minimal(base_size = 11) +
+    labs(
+      title    = paste("Extremificação da Sazonalidade (Amplitude Relativa) —", cfg$label),
+      subtitle = "Razão da oscilação (Máximo - Mínimo) dividida pela média anual",
+      x        = "Ano Hidrológico",
+      y        = "Amplitude Relativa (Adimensional)",
+      caption  = "Valores maiores indicam que a diferença entre a cheia e a seca aumentou em relação ao comportamento médio."
+    ) +
+    theme(
+      strip.background = element_rect(fill = "gray95", color = NA),
+      panel.grid.minor = element_blank()
+    )
+  
+  return(graficos)
+}
+
+#' Salva os gráficos gerados no diretório padrão do run
+#'
+#' @param list_plots Lista de objetos ggplot.
+#' @param image_dir  Diretório de destino (retornado pelo setup_dirs).
+#' @param var_id     Identificador da variável (ex: "discharge").
+#' @export
+salvar_graficos_sazonalidade <- function(list_plots, image_dir, var_id) {
+  if (length(list_plots) == 0) return(invisible(NULL))
+  
+  walk2(names(list_plots), list_plots, function(nome, plot_obj) {
+    nome_arquivo <- paste0("sazonalidade_", var_id, "_", nome, ".png")
+    caminho_final <- file.path(image_dir, nome_arquivo)
+    
+    # Salva em proporção de tela ideal para análise rápida
+    ggsave(
+      filename = caminho_final,
+      plot     = plot_obj,
+      width    = 12,
+      height   = 8,
+      dpi      = 150
+    )
+    message(sprintf("  -> Gráfico salvo: %s", nome_arquivo))
+  })
+}

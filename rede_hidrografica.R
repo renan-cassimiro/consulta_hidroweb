@@ -65,7 +65,7 @@ path <- fs::path
 # -----------------------------------------------------------------------------
 source(here("functions/functions.R"))
 
-RUN_NAME <- "amacro"
+RUN_NAME <- "xingu_river"
 
 INPUT_DIR <- here("input", RUN_NAME)
 DEM_PATH <- path(INPUT_DIR, "bacias_amacro_fathomdem_low_res.tif")
