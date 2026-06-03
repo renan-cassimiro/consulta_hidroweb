@@ -70,6 +70,7 @@ source(here::here("R/plots.R"))        # gerar_graficos(), salvar_graficos()
 source(here::here("R/consolidate.R"))  # consolidar_resultados(), salvar_consolidado()
 source(here::here("R/report.R"))          # renderizar_todos()
 source(here::here("R/seasonality.R"))
+source(here::here("R/chirps_climate.R"))
 
 
 # -----------------------------------------------------------------------------
@@ -269,7 +270,7 @@ message(sprintf(
 ))
 
 # -----------------------------------------------------------------------------
-# 9. ANÁLISE DE SAZONALIDADE HIDROLÓGICA (MÓDULO JORNALÍSTICO)
+# 9. ANÁLISE DE SAZONALIDADE HIDROLÓGICA 
 # -----------------------------------------------------------------------------
 message("\n====== PROCESSANDO SAZONALIDADE JORNALÍSTICA ENRIQUECIDA ======")
 
@@ -303,6 +304,103 @@ walk(VARIAVEIS_ATIVAS, function(v) {
     message(sprintf("  [%s] Processo concluído com sucesso!", v))
   }
 })
+
+#TODO
+# -----------------------------------------------------------------------------
+# 10. ANÁLISE DE SAZONALIDADE HIDROLÓGICA 
+# -----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# 1. CAMINHOS BASE
+# ----------------------------------------------------------------------------
+d8_pointer_raster <- D8_POINTER
+dir_tmp           <- here("output/xingu_river/data/watershed/temp")
+dir_create(dir_tmp) # Pasta temporária para os rasters de cada estação
+
+# Carrega os pontos que já sofreram o SNAP (devem estar na mesma projeção do DEM, ex: 5880)
+estacoes_snap <- st_read(here("output/xingu_river/data/xingu_river_snapped_stations.gpkg"))
+codigos_estacoes <- unique(estacoes_snap$station_code)
+
+message(sprintf("\n====== INICIANDO DELIMITAÇÃO INDIVIDUAL PARA %d ESTAÇÕES ======", length(codigos_estacoes)))
+
+# Lista para armazenar os polígonos de cada bacia
+lista_bacias <- list()
+
+# ----------------------------------------------------------------------------
+# 2. LOOP POR ESTAÇÃO (Garante o acúmulo real a montante)
+# ----------------------------------------------------------------------------
+for (i in seq_along(codigos_estacoes)) {
+  cod <- codigos_estacoes[i]
+  message(sprintf("[%d/%d] Delimitando bacia da estação: %s", i, length(codigos_estacoes), cod))
+  
+  # Caminhos específicos desta estação
+  pt_shp  <- path(dir_tmp, paste0("pt_", cod, ".shp"))
+  out_tif <- path(dir_tmp, paste0("wsh_", cod, ".tif"))
+  
+  # 1. Filtra e isola apenas o ponto desta estação
+  ponto_individual <- estacoes_snap |> filter(station_code == cod) |> select(station_code)
+  st_write(ponto_individual, pt_shp, delete_dsn = TRUE, quiet = TRUE)
+  
+  # 2. Executa o Watershed do Whitebox apenas para este ponto
+  wbt_watershed(
+    d8_pntr  = d8_pointer_raster,
+    pour_pts = pt_shp,
+    output   = out_tif
+  )
+  
+  # 3. Lê o raster gerado e transforma em polígono se ele existir e for válido
+  # if (file_exists(out_tif)) {
+    r_bacia <- rast(out_tif)
+    
+    # Verifica se o raster não está vazio (pode acontecer se o snap falhou drasticamente)
+    # if (global(r_bacia, "not_na")$not_na > 0) {
+      poligono_sf <- as.polygons(r_bacia) |> 
+        st_as_sf() |> 
+        st_transform(4326) |>             # Converte para WGS84 para o CHIRPS
+        mutate(station_code = cod) |>     # Injeta o ID correto
+        select(station_code, geometry)
+      
+      lista_bacias[[cod]] <- poligono_sf
+    # } else {
+      # warning(sprintf("A bacia da estação %s gerou um raster vazio. Verifique o snap.", cod))
+    # }
+  # }
+}
+
+# ----------------------------------------------------------------------------
+# 3. CONSOLIDANDO AS GEOMETRIAS SOBREPOSTAS
+# ----------------------------------------------------------------------------
+message("\n[Consolidando polígonos e salvando produto final...]")
+
+bacias_cumulativas_todas <- bind_rows(lista_bacias)
+
+# Salva o arquivo final com todas as bacias cumulativas
+st_write(
+  bacias_cumulativas_todas, 
+  here::here("output/xingu_river/data/bacias_contribuicao_cumulativa.gpkg"),
+  delete_dsn = TRUE
+)
+
+# Limpa a pasta temporária para poupar espaço em disco
+dir_delete(dir_tmp)
+
+message("Sucesso! O arquivo 'bacias_contribuicao_cumulativa.gpkg' foi gerado com bacias sobrepostas reais.")
+
+
+# 2. Definir a pasta onde o CHIRPS vai ficar guardado
+# Sugestão: crie uma "variável falsa" na sua arquitetura chamada "chirps"
+pasta_chirps_organizado <- here::here("output/xingu_river/data/stations_chirps/organized")
+
+# # 3. Disparar o download
+# obter_chirps_para_bacias(bacias_sf = bacias_sf, dir_saida = pasta_chirps_organizado, 
+#   data_inicio = "2000-01-01", data_fim = "2025-12-31")
+
+# 3. Roda a extração
+processar_rasters_chirps_mensal(
+  dir_rasters = "input/xingu_river/chirps_gee",
+  bacias_sf   = bacias_cumulativas_todas,
+  dir_saida   = pasta_chirps_organizado
+)
 
 # -----------------------------------------------------------------------------
 # 10. VERIFICAÇÃO FINAL

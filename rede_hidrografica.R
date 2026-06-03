@@ -68,8 +68,8 @@ source(here("functions/functions.R"))
 RUN_NAME <- "xingu_river"
 
 INPUT_DIR <- here("input", RUN_NAME)
-DEM_PATH <- path(INPUT_DIR, "bacias_amacro_fathomdem_low_res.tif")
-STUDAY_AREA_PATH <- path(INPUT_DIR, "bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")
+DEM_PATH <- path(INPUT_DIR, "xingu_river_study_area_bounding_box_fathomdem_30m_cog.tif")
+STUDAY_AREA_PATH <- path(INPUT_DIR, "xingu_river_study_area_bounding_box.gpkg")
 
 OUTPUT_DIR <- here("output", RUN_NAME)
 DATA_DIR <- path(OUTPUT_DIR, "data")
@@ -157,7 +157,7 @@ message("\n=== 3. Extração da rede de drenagem ===")
 # Limiar de acumulação para definir início de canal
 # 30m: ~1000 células ≈ 0.9 km² de área contribuinte mínima
 # Ajuste conforme necessário para a densidade de drenagem da região
-LIMIAR_ACUMULACAO <- 50
+LIMIAR_ACUMULACAO <- 600000
 
 message("  Limiar de acumulação: ", LIMIAR_ACUMULACAO, " células (~", round(LIMIAR_ACUMULACAO * 30^2 / 1e6, 2), " km²)")
 wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LIMIAR_ACUMULACAO)
@@ -189,7 +189,7 @@ wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LI
 message("\n=== 4. Snap hidrológico das estações ===")
 
 # Carrega estações
-analysed_stations <- st_read_parquet(path(DATA_DIR, "analysed_stations.parquet"))
+analysed_stations <- st_read_parquet(path(DATA_DIR, "xingu_river_disponibilidade_spatial.parquet"))
 
 ###Filtrar por áreas de contribuição
 analysed_stations <- filter(analysed_stations, area_km2>10000)
@@ -261,7 +261,7 @@ st_write(estacoes_snap, SNAP_PATH,  delete_dsn = TRUE, quiet = TRUE)
 message("\n=== 5. Delimitação das bacias de contribuição ===")
 message("  Processando ", nrow(estacoes_snap), " estações — pode demorar alguns minutos...")
 
-wbt_extract_streams(flow_accum = D8_ACCUM, output = BIG_STREAMS_RAST, threshold = 5000)
+wbt_extract_streams(flow_accum = D8_ACCUM, output = BIG_STREAMS_RAST, threshold = 600000)
 wbt_stream_link_identifier(streams = BIG_STREAMS_RAST, d8_pntr = D8_POINTER, output = STREAM_LINKS)
 wbt_subbasins(d8_pntr = D8_POINTER, streams = STREAM_LINKS, output = SUBBASINS)
 
@@ -273,11 +273,11 @@ bacias_estacoes <- bacias_estacoes |>
 
 # Spatial join — cada estação herda a bacia onde cai
 estacoes_com_bacia <- estacoes_snap |> st_join(bacias_estacoes, join = st_within) |>
-  left_join(bacias_estacoes |> st_drop_geometry() |> select(amacro_higher_order_subbasins, area_km2), by = "amacro_higher_order_subbasins")
+  left_join(bacias_estacoes |> st_drop_geometry() |> select(xingu_river_higher_order_subbasins, area_km2), by = "xingu_river_higher_order_subbasins")
 
 # Verifica distribuição
 message("Estações por bacia:")
-print(table(estacoes_com_bacia$amacro_higher_order_subbasins))
+print(table(estacoes_com_bacia$xingu_river_higher_order_subbasins))
 
 # 5.10 QA simples - estação precisa cair dentro da própria bacia
 validacao <- st_intersects(estacoes_snap, bacias_estacoes)
@@ -293,9 +293,9 @@ message("Área mín: ", round(min(bacias_estacoes$area_km2), 1), " km²")
 message("Área máx: ", round(max(bacias_estacoes$area_km2), 1), " km²")
 
 # 5.11 Salva
-st_write(bacias_estacoes, path(SUBBASINS_VEC), delete_dsn = TRUE, quiet = TRUE)
+st_write(estacoes_com_bacia, path(BACIAS_PATH), delete_dsn = TRUE, quiet = TRUE)
 message("  Bacias exportadas em: ", BACIAS_PATH)
-table(is.na(bacias_estacoes$xingu_river_higher_order_subbasins))
+table(is.na(estacoes_com_bacia$xingu_river_higher_order_subbasins))
 
 # Mapa de conferência
 ggplot() +
