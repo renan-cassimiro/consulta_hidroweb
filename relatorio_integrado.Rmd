@@ -1,0 +1,183 @@
+---
+title: "Relatório Hidroclimatológico Integrado - `r params$cfg$label`"
+author: "Núcleo de Investigação de Dados"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+params:
+  graficos: NULL   # Lista expandida contendo gráficos básicos, consolidados e espaciais
+  cfg:      NULL   # Objeto de configuração da variável
+  tabela:   NULL   # Tibble resumo completo (unificado com as métricas do residual)
+  run_name: ""
+
+header-includes:
+  - \usepackage{float}
+  - \usepackage{placeins}
+  - \usepackage{booktabs}
+  - \usepackage{longtable}
+  - \usepackage[table]{xcolor}
+  - \usepackage{colortbl}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  out.width = "100%"
+)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+
+cfg        <- params$cfg
+unit_label <- cfg$unit_label
+var_label  <- cfg$label
+sel_params <- cfg$select_stations_params
+
+```
+
+# Introdução e Contexto Metodológico
+
+Este relatório consolida a avaliação estatística de tendências históricas e a análise integrada clima-vazão para a bacia **`r params$run_name`**. O objetivo fundamental desta nota técnica é isolar o efeito da variabilidade climática natural dos impactos antrópicos no território (mudança no uso do solo, desmatamento e barramentos).
+
+A análise utiliza dados de duas fontes principais de alta confiabilidade:
+
+1. **Dados de Superfície (ANA):** Séries temporais limpas e consistidas provenientes da Rede Hidrometeorológica Nacional operada pela Agência Nacional de Águas e Saneamento Básico.
+2. **Dados de Satélite (CHIRPS):** Estimativas de precipitação do *Climate Hazards Center*, combinando observações de satélite com dados de estações meteorológicas globais, extraídas exatamente sobre o polígono de drenagem de cada estação via estatística zonal ponderada.
+
+---
+
+# Disponibilidade e Qualidade dos Dados
+
+Antes da aplicação dos modelos de tendência e elasticidade, as estações passaram por um rigoroso filtro de qualidade hidrológica para evitar distorções induzidas por falhas de leitura.
+
+* **Janela de Análise:** `r sel_params$iniYear` a `r sel_params$finYear`
+* **Garantia de Dados:** Mínimo de `r sel_params$minYears` anos preenchidos.
+* **Tolerância a Falhas:** Máximo de `r sel_params$maxMissing`% de dados ausentes permitidos.
+
+## Cronograma de Cobertura Temporal
+
+```{r disponibilidade, fig.cap="Linha do tempo de dados úteis após filtragem por consistência.", fig.width=10, fig.height=5, fig.pos='H'}
+params$graficos$disponibilidade
+
+```
+
+\FloatBarrier
+\newpage
+
+---
+
+# Visão Consolidada Regional (O Efeito Multiplicador)
+
+Esta seção apresenta a síntese do comportamento ambiental da bacia nos últimos 5 anos. Cruzamos a variação da precipitação acumulada com a resposta real da vazão dos rios.
+
+Em condições naturais estáveis, a diminuição da vazão deve ser proporcional à redução das chuvas. Desvios severos abaixo da linha de equilíbrio indicam perda de resiliência do ecossistema e degradação da capacidade de retenção de água do solo (efeito esponja).
+
+## Dispersão Clima vs. Vazão e Elasticidade
+
+A elasticidade climatológica indica o quão hipersensível o rio se tornou à variação do clima. Matematicamente, ela expressa a variação percentual esperada na vazão para cada 1% de alteração na chuva:
+
+
+$$\text{Elasticidade} = \beta_1 \times \left(\frac{\bar{P}}{\bar{Q}}\right)$$
+
+```{r scatter_consolidado, fig.cap="Gráfico de sensibilidade regional. Estações abaixo da linha diagonal pontilhada apresentam taxas de perda de água superiores ao desfalque de chuva ocorrido no período.", fig.width=10, fig.height=6, fig.pos='H'}
+params$graficos$consolidado_scatter
+
+```
+
+\FloatBarrier
+
+## Distribuição Espacial da Sensibilidade
+
+O mapa abaixo plota a localização geográfica de cada ponto de monitoramento, destacando onde estão os focos críticos de colapso do fluxo de água.
+
+```{r mapa_elasticidade, fig.cap="Expressão espacial da elasticidade. Pontos escuros/maiores indicam sub-bacias sob estresse ambiental crônico, onde o rio seca rapidamente com qualquer variação do clima.", fig.width=9, fig.height=7, fig.pos='H'}
+params$graficos$consolidado_mapa
+
+```
+
+\FloatBarrier
+\newpage
+
+---
+
+# Análise de Tendências e Sazonalidade (STL)
+
+Removendo as oscilações naturais das estações do ano (inverno/verão), calculamos a tendência monótona de longo prazo e a inclinação matemática (velocidade de queda) dos corpos d'água através do estimador não-paramétrico de *Sen's Slope*.
+
+## Trajetória Histórica das Séries com Tendência Isolada
+
+```{r stl_tendencias, fig.cap="Séries temporais brutas decompostas por algoritmo STL (Seasonal and Trend Decomposition using Loess). A linha de tendência representa o comportamento real do rio limpo do efeito sazonal.", fig.width=14, fig.height=10, fig.pos='H'}
+params$graficos$tendencias_classificadas
+
+```
+
+\FloatBarrier
+
+## Direção e Força das Tendências Locais
+
+```{r mapa_tendencias, fig.cap="Mapa estatístico de tendências de longo prazo pelo teste de Mann-Kendall.", fig.width=10, fig.height=7, fig.pos='H'}
+params$graficos$mapa_tendencia_hidrologica
+
+```
+
+\FloatBarrier
+\newpage
+
+---
+
+# Tabela Resumo para a Reportagem
+
+A tabela abaixo compila os dados fundamentais para subsidiar a redação da matéria e a criação de infográficos. Ela contém os testes de validação estatística (*Mann-Kendall* e a correção de *Yue-Pilon* contra memórias hidrológicas), a velocidade da perda de água (*Slope de Sen*) e a métrica de *Elasticidade*.
+
+* **Valores em Vermelho:** Estações com tendência crônica de queda.
+* **Valores em Azul:** Estações com tendência de alta.
+
+```{r tabela_resumo}
+# Ajusta colunas dinamicamente baseado nas variáveis que estão presentes no dataframe unificado
+tbl_print <- params$tabela |>
+  select(
+    station_code, tendencia, p_valor_mk, slope_sen, 
+    ponto_mudanca, elasticidade_estacao, queda_vazao_pct
+  ) |>
+  rename(
+    "Estação"       = station_code,
+    "Tendência"     = tendencia,
+    "p-valor (MK)"  = p_valor_mk,
+    "Slope de Sen"  = slope_sen,
+    "Ano Quebra"    = ponto_mudanca,
+    "Elasticidade"  = elasticidade_estacao,
+    "Queda Recente" = queda_vazao_pct
+  )
+
+n_neg <- which(params$tabela$tendencia == "Negativa")
+n_pos <- which(params$tabela$tendencia == "Positiva")
+
+kable(
+  tbl_print,
+  format    = "latex",
+  booktabs  = TRUE,
+  longtable = TRUE,
+  caption   = "Tabela Geral de Métricas Estatísticas e Hidroclimatológicas",
+  align     = c("l", "l", rep("r", ncol(tbl_print) - 2))
+) |>
+  kable_styling(
+    latex_options = c("repeat_header", "striped", "hold_position"),
+    font_size     = 8
+  ) |>
+  row_spec(n_neg, color = "red") |>
+  row_spec(n_pos, color = "blue")
+
+```
+
+\FloatBarrier
+
+**Notas finais para interpretação jornalística:** Se uma estação possui uma **Elasticidade** alta (ex: acima de 1.5) combinada com um **p-valor** significativo (< 0.05) e uma **Queda Recente** fortemente negativa, o dado valida a manchete de que o rio está em processo de degradação acelerada que supera as causas naturais do regime de chuvas.
+
+```

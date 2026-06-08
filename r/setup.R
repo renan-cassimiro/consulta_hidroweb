@@ -26,6 +26,12 @@ library(tidyverse)
 library(trend)
 library(zyp)
 library(zoo)
+library(ggtext) # Para subtítulos e formatação de texto avançada
+library(whitebox)
+library(ggrepel) # Para os nomes das estações não se sobreporem no gráfico
+
+
+
 
 # -----------------------------------------------------------------------------
 # Criação da estrutura de diretórios para um dado run_name
@@ -51,7 +57,7 @@ setup_dirs <- function(run_name,
   
   dirs <- list(
     input_dir        = input_dir,
-    study_area_path  = path(input_dir, paste0("xingu_river_study_area_bounding_box.gpkg")),
+    study_area_path  = path(input_dir, paste0("bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")),
     output_dir       = output_dir,
     report_dir       = path(output_dir, "report"),
     image_dir        = path(output_dir, "images"),

@@ -404,3 +404,211 @@ salvar_graficos_sazonalidade <- function(list_plots, image_dir, var_id) {
     message(sprintf("  -> Gráfico salvo: %s", nome_arquivo))
   })
 }
+
+# =============================================================================
+# VISUALIZAÇÃO JORNALÍSTICA — BALANÇO E RESIDUAL HIDROLÓGICO
+# =============================================================================
+#
+# Descrição:
+#   Gera gráficos de alta qualidade técnica e estética para a reportagem,
+#   evidenciando a perda de vazão não explicada pela precipitação.
+# =============================================================================
+
+#' Gera e salva gráficos analíticos para cada estação fluviométrica
+#'
+#' @param caminho_resultado Caminho para o arquivo parquet gerado pelo modelo residual
+#' @param dir_saida         Pasta onde os gráficos (.png) serão guardados
+#' @export
+gerar_graficos_reportagem <- function(caminho_resultado, dir_saida) {
+  
+  dir_create(dir_saida)
+  
+  # 1. Carrega os dados modelados
+  df_dados <- read_parquet(caminho_resultado)
+  
+  estacoes <- unique(df_dados$station_code)
+  
+  message("\n====== A GERAR VISUALIZAÇÕES PARA A REPORTAGEM ======")
+  
+  for (estacao in estacoes) {
+    message(sprintf("A desenhar gráficos para a estação: %s", estacao))
+    
+    df_est <- df_dados |> filter(station_code == estacao) |> arrange(ano)
+    
+    # Extrai a elasticidade para usar no título/metadados
+    elasticidade_val <- round(unique(df_est$elasticidade_estacao), 2)
+    
+    # -------------------------------------------------------------------------
+    # VISUALIZAÇÃO 1: EVOLUÇÃO TEMPORAL DA CHUVA VS VAZÃO (INDEXADOS)
+    # Como as unidades são diferentes (mm vs m³/s), escalamos para base 100
+    # -------------------------------------------------------------------------
+    df_indexado <- df_est |> 
+      mutate(
+        chuva_idx = (chuva_anual_mm / first(chuva_anual_mm)) * 100,
+        vazao_idx = (vazao_media_m3s / first(vazao_media_m3s)) * 100
+      ) |> 
+      select(ano, chuva_idx, vazao_idx) |> 
+      pivot_longer(cols = c(chuva_idx, vazao_idx), names_to = "metrica", values_to = "valor")
+    
+    g1 <- ggplot(df_indexado, aes(x = ano, y = valor, color = metrica)) +
+      geom_line(size = 1.2, alpha = 0.8) +
+      geom_point(size = 2) +
+      scale_color_manual(
+        values = c("chuva_idx" = "#2b8cbe", "vazao_idx" = "#e34a33"),
+        labels = c("Chuva Acumulada Anual", "Vazão Média do Rio")
+      ) +
+      scale_x_continuous(breaks = seq(min(df_indexado$ano), max(df_indexado$ano), by = 4)) +
+      theme_minimal(base_size = 12) +
+      theme(
+        plot.title = element_markdown(face = "bold", size = 14),
+        plot.subtitle = element_markdown(size = 11, color = "gray30"),
+        legend.position = "top",
+        legend.title = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size = 10, color = "gray40")
+      ) +
+      labs(
+        title = sprintf("Estação %s: O Descompasso entre Chuva e Vazão", estacao),
+        subtitle = "Evolução dos dados indexados (Base 100 no primeiro ano da série). A separação das linhas mostra o rio a secar mais rápido que o clima.",
+        x = NULL,
+        y = "Índice (Primeiro ano verificado = 100)",
+        caption = "Fonte: Análise de dados ANA / CHIRPS"
+      )
+    
+    # -------------------------------------------------------------------------
+    # VISUALIZAÇÃO 2: O GRÁFICO DO RESIDUAL (% DE QUEBRA DE EXPECTATIVA)
+    # -------------------------------------------------------------------------
+    g2 <- ggplot(df_est, aes(x = ano, y = residual_pct)) +
+      # Barras vermelhas para anos com menos vazão que o esperado, azuis para mais
+      geom_col(aes(fill = residual_pct < 0), alpha = 0.75, width = 0.7) +
+      # Linha de tendência para capturar o colapso estrutural da bacia
+      geom_smooth(method = "loess", color = "#333333", size = 1, se = FALSE, linetype = "dashed") +
+      geom_hline(yintercept = 0, color = "gray50", size = 0.5) +
+      scale_fill_manual(values = c("TRUE" = "#d73027", "FALSE" = "#4575b4"), guide = "none") +
+      scale_x_continuous(breaks = seq(min(df_est$ano), max(df_est$ano), by = 4)) +
+      scale_y_continuous(labels = function(x) paste0(x, "%")) +
+      theme_minimal(base_size = 12) +
+      theme(
+        plot.title = element_markdown(face = "bold", size = 14),
+        plot.subtitle = element_markdown(size = 11, color = "gray30"),
+        panel.grid.minor = element_blank(),
+        axis.title.y = element_text(size = 10, color = "gray40")
+      ) +
+      labs(
+        title = sprintf("Estação %s: Défice Hidrológico Não Explicado pelo Clima", estacao),
+        subtitle = sprintf("Residual percentual (Vazão Real vs. Esperada pela Chuva).<br>Elasticidade Climatológica da Bacia: **%s** (Cada -1%% de chuva gera %s%% na vazão).", elasticidade_val, elasticidade_val),
+        x = NULL,
+        y = "Diferença da Vazão Esperada (%)",
+        caption = "Valores negativos (vermelho) indicam que o rio correu menos do que a chuva histórica justificaria.\nFonte: Modelo Estatístico de Balanço Hídrico baseado em ANA e CHIRPS."
+      )
+    
+    # Salva os gráficos em alta resolução (300 DPI) prontos para a equipa de arte/infografia
+    ggsave(path(dir_saida, sprintf("estacao_%s_chuva_vs_vazao.png", estacao)), plot = g1, width = 9, height = 5.5, dpi = 300, bg = "white")
+    ggsave(path(dir_saida, sprintf("estacao_%s_residual_tendencia.png", estacao)), plot = g2, width = 9, height = 5.5, dpi = 300, bg = "white")
+  }
+  
+  message(sprintf("\nSucesso! Todos os gráficos foram exportados para: %s", dir_saida))
+}
+
+# =============================================================================
+# VISUALIZAÇÃO CONSOLIDADA E ESPACIAL (MAPAS)
+# =============================================================================
+# Descrição:
+#   Agrega os resultados de todas as estações para gerar uma visão regional.
+#   Gera gráficos de dispersão (Chuva vs Vazão) e mapas de elasticidade.
+# =============================================================================
+
+#' Gera visualizações consolidadas de todas as estações
+#'
+#' @param caminho_resultado   Caminho para o parquet gerado pelo residual_hidrologico
+#' @param caminho_estacoes_sf Caminho para o geopackage com os pontos das estações
+#' @param dir_saida           Pasta para salvar os gráficos agregados
+#' @param rios_sf             (Opcional) Objeto sf com a hidrografia para dar contexto ao mapa
+#' @export
+gerar_visao_consolidada <- function(caminho_resultado, caminho_estacoes_sf, dir_saida, rios_sf = NULL) {
+  
+  dir_create(dir_saida)
+  
+  # 1. Carrega os dados tabulares e espaciais
+  df_dados <- read_parquet(caminho_resultado)
+  # estacoes_sf <- st_read(caminho_estacoes_sf, quiet = TRUE)
+  estacoes_sf <- caminho_estacoes_sf
+  
+  message("\n====== A GERAR VISÃO CONSOLIDADA DA BACIA ======")
+  
+  # 2. Resumo por estação (Médias e Elasticidade)
+  df_resumo <- df_dados |> 
+    group_by(station_code) |> 
+    summarise(
+      elasticidade = first(elasticidade_estacao),
+      # Calcula a variação média da vazão e chuva nos últimos 5 anos em relação à média histórica
+      media_chuva = mean(chuva_anual_mm),
+      media_vazao = mean(vazao_media_m3s),
+      chuva_recente = mean(tail(chuva_anual_mm, 5)),
+      vazao_recente = mean(tail(vazao_media_m3s, 5)),
+      .groups = "drop"
+    ) |> 
+    mutate(
+      queda_chuva_pct = ((chuva_recente - media_chuva) / media_chuva) * 100,
+      queda_vazao_pct = ((vazao_recente - media_vazao) / media_vazao) * 100
+    )
+  
+  # -------------------------------------------------------------------------
+  # VISUALIZAÇÃO 1: ELASTICIDADE COMPARADA (SCATTER PLOT)
+  # -------------------------------------------------------------------------
+  g_scatter <- ggplot(df_resumo, aes(x = queda_chuva_pct, y = queda_vazao_pct)) +
+    # Adiciona linhas de referência no zero
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
+    # Linha de proporção 1:1 (Se a chuva cai 10%, a vazão cai 10%)
+    geom_abline(slope = 1, intercept = 0, color = "gray80", linetype = "dotted", size = 1) +
+    
+    geom_point(aes(size = elasticidade, color = elasticidade), alpha = 0.8) +
+    scale_color_viridis_c(option = "magma", direction = -1, name = "Elasticidade") +
+    scale_size_continuous(range = c(3, 10), guide = "none") +
+    geom_text_repel(aes(label = station_code), size = 3, color = "gray30") +
+    
+    theme_minimal(base_size = 12) +
+    labs(
+      title = "O Efeito Multiplicador da Seca (Últimos 5 Anos)",
+      subtitle = "Comparação percentual: o quanto a chuva diminuiu vs. o quanto o rio encolheu. Pontos abaixo da linha diagonal indicam rios que secaram desproporcionalmente mais do que a falta de chuva.",
+      x = "Variação da Chuva Média Recente (%)",
+      y = "Variação da Vazão Média Recente (%)",
+      caption = "Elaboração com dados ANA e CHIRPS"
+    )
+  
+  # -------------------------------------------------------------------------
+  # VISUALIZAÇÃO 2: MAPA DE ELASTICIDADE
+  # -------------------------------------------------------------------------
+  # Faz o join dos dados estatísticos com a geometria
+  mapa_dados <- estacoes_sf |> 
+    left_join(df_resumo, by = "station_code") |> 
+    filter(!is.na(elasticidade)) # Remove estações que não tiveram dados no modelo
+  
+  g_mapa <- ggplot()
+  
+  # Se o usuário passou a camada de rios, adiciona como fundo
+  if (!is.null(rios_sf)) {
+    g_mapa <- g_mapa + geom_sf(data = rios_sf, color = "#a6bddb", size = 0.4)
+  }
+  
+  g_mapa <- g_mapa +
+    geom_sf(data = mapa_dados, aes(color = elasticidade, size = elasticidade), alpha = 0.9) +
+    scale_color_viridis_c(option = "magma", direction = -1, name = "Elasticidade\n(Sensibilidade)") +
+    scale_size_continuous(range = c(2, 8), guide = "none") +
+    theme_void(base_size = 12) +
+    theme(
+      plot.title = element_markdown(face = "bold", size = 14, hjust = 0.5),
+      legend.position = "right"
+    ) +
+    labs(
+      title = "Mapa de Sensibilidade Hidrológica",
+      subtitle = "Pontos mais escuros/maiores indicam bacias onde a vazão entra em colapso rápido com qualquer estiagem."
+    )
+  
+  # Exportar
+  ggsave(path(dir_saida, "consolidado_scatter_elasticidade.png"), plot = g_scatter, width = 10, height = 7, dpi = 300, bg = "white")
+  ggsave(path(dir_saida, "consolidado_mapa_elasticidade.png"), plot = g_mapa, width = 9, height = 9, dpi = 300, bg = "white")
+  
+  message(sprintf("Sucesso! Visões consolidadas guardadas em: %s", dir_saida))
+}

@@ -38,7 +38,7 @@ VARIABLE_CONFIGS <- list(
     select_stations_params = list(
       mode          = "yearly",
       maxMissing    = 100,
-      minYears      = 2,
+      minYears      = 15,
       month         = 1,
       iniYear       = 2010,
       finYear       = 2026,
@@ -59,7 +59,7 @@ VARIABLE_CONFIGS <- list(
     select_stations_params = list(
       mode          = "yearly",
       maxMissing    = 100,
-      minYears      = 2,
+      minYears      = 15,
       month         = 1,
       iniYear       = 2010,
       finYear       = 2026,
@@ -80,7 +80,7 @@ VARIABLE_CONFIGS <- list(
     select_stations_params = list(
       mode          = "yearly",
       maxMissing    = 100,
-      minYears      = 2,
+      minYears      = 15,
       month         = 1,
       iniYear       = 2010,
       finYear       = 2026,

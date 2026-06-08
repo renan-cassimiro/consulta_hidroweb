@@ -65,11 +65,11 @@ path <- fs::path
 # -----------------------------------------------------------------------------
 source(here("functions/functions.R"))
 
-RUN_NAME <- "xingu_river"
+RUN_NAME <- "amacro"
 
 INPUT_DIR <- here("input", RUN_NAME)
-DEM_PATH <- path(INPUT_DIR, "xingu_river_study_area_bounding_box_fathomdem_30m_cog.tif")
-STUDAY_AREA_PATH <- path(INPUT_DIR, "xingu_river_study_area_bounding_box.gpkg")
+DEM_PATH <- path(INPUT_DIR, "amacro_fathomdem_300m.tif")
+STUDAY_AREA_PATH <- path(INPUT_DIR, "bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")
 
 OUTPUT_DIR <- here("output", RUN_NAME)
 DATA_DIR <- path(OUTPUT_DIR, "data")
@@ -189,7 +189,7 @@ wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LI
 message("\n=== 4. Snap hidrológico das estações ===")
 
 # Carrega estações
-analysed_stations <- st_read_parquet(path(DATA_DIR, "xingu_river_disponibilidade_spatial.parquet"))
+analysed_stations <- st_read_parquet(path(OUTPUT_DIR, "consolidated", "amacro_disponibilidade_spatial.parquet"))
 
 ###Filtrar por áreas de contribuição
 analysed_stations <- filter(analysed_stations, area_km2>10000)
@@ -254,6 +254,7 @@ if (nrow(problematicas) > 0) {
 # Exportar
 # -----------------------------------------------------------------------------
 st_write(estacoes_snap, SNAP_PATH,  delete_dsn = TRUE, quiet = TRUE)
+## Para a análise hidrológica integrada, rodar até aqui
 
 # -----------------------------------------------------------------------------
 # 5. DELIMITAÇÃO DAS BACIAS DE CONTRIBUIÇÃO

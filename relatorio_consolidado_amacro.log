@@ -1,9 +1,9 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.6.1)  8 JUN 2026 10:32
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.6.1)  8 JUN 2026 14:06
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river.tex
-(c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river.tex
+**C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro.tex
+(c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro.tex
 LaTeX2e <2026-06-01>
 L3 programming layer <2026-05-26>
 (c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/base/article.cls
@@ -393,7 +393,7 @@ File: bkm-pdftex.def 2026-05-21 v1.32 bookmark driver for pdfTeX (HO)
 LaTeX Font Info:    Trying to load font information for T1+lmr on input line 77.
 (c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/lm/t1lmr.fd
 File: t1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
-) (./relatorio_consolidado_xingu_river.aux
+) (./relatorio_consolidado_amacro.aux
 
 LaTeX Warning: Label `tab:tabelas' multiply defined.
 
@@ -401,7 +401,7 @@ LaTeX Warning: Label `tab:tabelas' multiply defined.
 LaTeX Warning: Label `tab:tabelas' multiply defined.
 
 )
-\openout1 = `relatorio_consolidado_xingu_river.aux'.
+\openout1 = `relatorio_consolidado_amacro.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 77.
 LaTeX Font Info:    ... okay on input line 77.
@@ -482,7 +482,7 @@ Package microtype Info: No adjustment of character kerning.
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman (RS)
 )
 Package hyperref Info: Link coloring OFF on input line 77.
-(./relatorio_consolidado_xingu_river.toc
+(./relatorio_consolidado_amacro.toc
 LaTeX Font Info:    Trying to load font information for OT1+lmr on input line 3.
 (c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/lm/ot1lmr.fd
 File: ot1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
@@ -522,106 +522,109 @@ LaTeX Font Info:    Trying to load font information for TS1+lmr on input line 7.
 File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 ))
 \tf@toc=\write3
-\openout3 = `relatorio_consolidado_xingu_river.toc'.
+\openout3 = `relatorio_consolidado_amacro.toc'.
 
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-1.pdf, id=32, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-1.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-1.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-1.pdf  used on input line 97.
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-1.pdf, id=32, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-1.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-1.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-1.pdf  used on input line 97.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
 [1
 
 {c:/Users/renan/AppData/Roaming/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/enc/dvips/lm/lm-ec.enc}{c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/enc/dvips/lm/lm-ts1.enc}]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-2.pdf, id=73, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-2.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-2.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-2.pdf  used on input line 105.
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-2.pdf, id=73, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-2.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-2.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-2.pdf  used on input line 105.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[2 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-1.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-3.pdf, id=83, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-3.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-3.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-3.pdf  used on input line 113.
+[2 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-1.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-3.pdf, id=86, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-3.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-3.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-3.pdf  used on input line 113.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[3 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-2.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-1.pdf, id=96, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-1.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-1.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-1.pdf  used on input line 129.
+[3 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-2.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-1.pdf, id=99, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-1.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-1.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-1.pdf  used on input line 129.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[4 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/disponibilidade-3.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-2.pdf, id=109, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-2.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-2.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-2.pdf  used on input line 136.
+[4 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/disponibilidade-3.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-2.pdf, id=112, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-2.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-2.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-2.pdf  used on input line 136.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[5 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-1.pdf>] [6 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-2.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-3.pdf, id=133, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-3.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-3.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-3.pdf  used on input line 144.
+[5 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-1.pdf>] [6 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-2.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-3.pdf, id=136, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-3.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-3.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-3.pdf  used on input line 144.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-4.pdf, id=134, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-4.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-4.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-4.pdf  used on input line 150.
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-4.pdf, id=137, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-4.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-4.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-4.pdf  used on input line 150.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[7 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-3.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-5.pdf, id=145, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-5.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-5.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-5.pdf  used on input line 161.
+[7 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-3.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-5.pdf, id=148, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-5.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-5.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-5.pdf  used on input line 161.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[8 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-4.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-6.pdf, id=157, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-6.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-6.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-6.pdf  used on input line 168.
+[8 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-4.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-6.pdf, id=163, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-6.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-6.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-6.pdf  used on input line 168.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[9 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-5.pdf>] [10 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-6.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-7.pdf, id=180, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-7.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-7.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-7.pdf  used on input line 176.
+[9 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-5.pdf>] [10 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-6.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-7.pdf, id=186, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-7.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-7.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-7.pdf  used on input line 176.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-8.pdf, id=181, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-8.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-8.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-8.pdf  used on input line 182.
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-8.pdf, id=187, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-8.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-8.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-8.pdf  used on input line 182.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[11 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-7.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-9.pdf, id=191, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-9.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-9.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-9.pdf  used on input line 193.
+[11 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-7.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-9.pdf, id=197, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-9.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-9.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-9.pdf  used on input line 193.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[12 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-8.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-10.pdf, id=202, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-10.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-10.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-10.pdf  used on input line 200.
+[12 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-8.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-10.pdf, id=211, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-10.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-10.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-10.pdf  used on input line 200.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[13 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-9.pdf>] [14 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-10.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-11.pdf, id=226, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-11.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-11.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-11.pdf  used on input line 208.
+[13 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-9.pdf>] [14 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-10.pdf>]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-11.pdf, id=235, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-11.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-11.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-11.pdf  used on input line 208.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-12.pdf, id=227, 469.755pt x 325.215pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-12.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-12.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-12.pdf  used on input line 214.
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-12.pdf, id=236, 469.755pt x 325.215pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-12.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-12.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-12.pdf  used on input line 214.
 (pdftex.def)             Requested size: 469.75502pt x 325.2142pt.
-[15 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-11.pdf>] [16 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/tendencias-12.pdf>]
-<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/contagem_consolidada-1.pdf, id=250, 722.7pt x 361.35pt>
-File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/contagem_consolidada-1.pdf Graphic file (type pdf)
-<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/contagem_consolidada-1.pdf>
-Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/contagem_consolidada-1.pdf  used on input line 325.
+[15 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-11.pdf>] [16 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/tendencias-12.pdf>] [17] [18] [19] [20]
+<C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/contagem_consolidada-1.pdf, id=282, 722.7pt x 361.35pt>
+File: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/contagem_consolidada-1.pdf Graphic file (type pdf)
+<use C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/contagem_consolidada-1.pdf>
+Package pdftex.def Info: C:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/contagem_consolidada-1.pdf  used on input line 545.
 (pdftex.def)             Requested size: 469.75502pt x 234.88023pt.
+
+LaTeX Warning: Float too large for page by 1244.56099pt on input line 747.
+
 
 LaTeX Warning: `!h' float specifier changed to `!ht'.
 
-[17 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/xingu_river/report/relatorio_consolidado_xingu_river_files/figure-latex/contagem_consolidada-1.pdf>] [18] (./relatorio_consolidado_xingu_river.aux)
+[21 <c:/Users/renan/OneDrive/Projetos/consulta_hidroweb/output/amacro/report/relatorio_consolidado_amacro_files/figure-latex/contagem_consolidada-1.pdf>] [22] (./relatorio_consolidado_amacro.aux)
  ***********
 LaTeX2e <2026-06-01>
 L3 programming layer <2026-05-26>
@@ -632,17 +635,17 @@ LaTeX Warning: There were multiply-defined labels.
  ) 
 Here is how much of TeX's memory you used:
  13761 strings out of 469096
- 241231 string characters out of 5456517
- 695234 words of memory out of 5000000
+ 239668 string characters out of 5456517
+ 773245 words of memory out of 5000000
  42468 multiletter control sequences out of 15000+600000
- 672395 words of font info for 98 fonts, out of 8000000 for 9000
+ 672218 words of font info for 96 fonts, out of 8000000 for 9000
  36 hyphenation exceptions out of 8191
- 83i,9n,93p,1107b,616s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 83i,9n,93p,1097b,617s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmbx10.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmbx12.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr10.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr12.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr17.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmr9.pfb><c:/Users/renan/AppData/Roaming/TinyTeX/texmf-dist/fonts/type1/public/lm/lmri9.pfb>
-Output written on relatorio_consolidado_xingu_river.pdf (18 pages, 299129 bytes).
+Output written on relatorio_consolidado_amacro.pdf (22 pages, 984913 bytes).
 PDF statistics:
- 404 PDF objects out of 1000 (max. 8388607)
- 332 compressed objects within 4 object streams
- 52 named destinations out of 1000 (max. 500000)
+ 434 PDF objects out of 1000 (max. 8388607)
+ 358 compressed objects within 4 object streams
+ 56 named destinations out of 1000 (max. 500000)
  28977 words of extra memory for PDF output out of 29859 (max. 10000000)
 

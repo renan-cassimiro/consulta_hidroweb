@@ -71,12 +71,13 @@ source(here::here("R/consolidate.R"))  # consolidar_resultados(), salvar_consoli
 source(here::here("R/report.R"))          # renderizar_todos()
 source(here::here("R/seasonality.R"))
 source(here::here("R/chirps_climate.R"))
-
+source(here::here("R/residual_hidrologico.R"))
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DO RUN
 # -----------------------------------------------------------------------------
-RUN_NAME <- "xingu_river"
+RUN_NAME <- "amacro"
+USAR_CACHE_LOCAL <- TRUE  # TRUE = Lê ficheiros Parquet gravados; FALSE = Força download da ANA
 
 # Variáveis a processar — subconjunto de VARIABLE_CONFIGS.
 # Para rodar só precipitação: VARIAVEIS_ATIVAS <- c("precipitation")
@@ -139,13 +140,27 @@ resultados_por_variavel <- map(
     )
     
     # -- 4b. Download + organização -------------------------------------------
-    dados_org <- baixar_e_organizar(
-      cfg        = cfg,
-      inventario = inventario,
-      run_name   = RUN_NAME,
-      raw_dir    = var_dirs$raw_dir,
-      org_dir    = var_dirs$org_dir
-    )
+    ficheiros_existentes <- list.files(var_dirs$org_dir, pattern = "\\.parquet$", full.names = TRUE)
+    
+    if (USAR_CACHE_LOCAL && length(ficheiros_existentes) > 0) {
+      message(sprintf("  [%s] A carregar %d estações do disco local (Download ignorado)", 
+                      cfg$label, length(ficheiros_existentes)))
+      
+      # Carrega os ficheiros Parquet gravados na sessão anterior
+      dados_org <- purrr::map(ficheiros_existentes, arrow::read_parquet)
+      # Nomeia a lista com o código da estação (extraído do nome do ficheiro)
+      names(dados_org) <- tools::file_path_sans_ext(basename(ficheiros_existentes))
+      
+    } else {
+      message(sprintf("  [%s] A descarregar dados da API da ANA...", cfg$label))
+      dados_org <- baixar_e_organizar(
+        cfg        = cfg,
+        inventario = inventario,
+        run_name   = RUN_NAME,
+        raw_dir    = var_dirs$raw_dir,
+        org_dir    = var_dirs$org_dir
+      )
+    }
     
     # -- 4c. Seleção por qualidade --------------------------------------------
     estacoes_sel <- selecionar_estacoes(cfg, dados_org)
@@ -213,7 +228,7 @@ consolidado <- consolidar_resultados(
 )
 
 salvar_consolidado(consolidado, dirs$consolidated_dir, RUN_NAME)
-
+#TODO implementar uma funação para recuperar os dados baixados que foram gravados
 # -----------------------------------------------------------------------------
 # 6. CAMADA ANALÍTICA ESPACIAL (analysed_stations)
 # -----------------------------------------------------------------------------
@@ -272,7 +287,8 @@ message(sprintf(
 # -----------------------------------------------------------------------------
 # 9. ANÁLISE DE SAZONALIDADE HIDROLÓGICA 
 # -----------------------------------------------------------------------------
-message("\n====== PROCESSANDO SAZONALIDADE JORNALÍSTICA ENRIQUECIDA ======")
+#TODO acho que tá faltando um mapa aqui
+message("\n====== PROCESSANDO SAZONALIDADE ======")
 
 # Loop dinâmico pelas variáveis ativas (vazão, cota, chuva)
 walk(VARIAVEIS_ATIVAS, function(v) {
@@ -313,12 +329,16 @@ walk(VARIAVEIS_ATIVAS, function(v) {
 # ----------------------------------------------------------------------------
 # 1. CAMINHOS BASE
 # ----------------------------------------------------------------------------
-d8_pointer_raster <- D8_POINTER
+OUTPUT_DIR <- here("output", RUN_NAME)
+DATA_DIR <- path(OUTPUT_DIR, "data")
+DEM_DIR <- path(DATA_DIR, "dem")
+d8_pointer_raster <- path(DEM_DIR, paste0(RUN_NAME, "_flow_direction.tif"))
 dir_tmp           <- here("output/xingu_river/data/watershed/temp")
 dir_create(dir_tmp) # Pasta temporária para os rasters de cada estação
 
 # Carrega os pontos que já sofreram o SNAP (devem estar na mesma projeção do DEM, ex: 5880)
-estacoes_snap <- st_read(here("output/xingu_river/data/xingu_river_snapped_stations.gpkg"))
+#Rodar rede hidrografica quando chegar aqui
+estacoes_snap <- st_read(here("output/amacro/data/amacro_snapped_stations.gpkg"))
 codigos_estacoes <- unique(estacoes_snap$station_code)
 
 message(sprintf("\n====== INICIANDO DELIMITAÇÃO INDIVIDUAL PARA %d ESTAÇÕES ======", length(codigos_estacoes)))
@@ -377,7 +397,7 @@ bacias_cumulativas_todas <- bind_rows(lista_bacias)
 # Salva o arquivo final com todas as bacias cumulativas
 st_write(
   bacias_cumulativas_todas, 
-  here::here("output/xingu_river/data/bacias_contribuicao_cumulativa.gpkg"),
+  here::here("output/amacro/data/bacias_contribuicao_cumulativa.gpkg"),
   delete_dsn = TRUE
 )
 
@@ -389,7 +409,7 @@ message("Sucesso! O arquivo 'bacias_contribuicao_cumulativa.gpkg' foi gerado com
 
 # 2. Definir a pasta onde o CHIRPS vai ficar guardado
 # Sugestão: crie uma "variável falsa" na sua arquitetura chamada "chirps"
-pasta_chirps_organizado <- here::here("output/xingu_river/data/stations_chirps/organized")
+pasta_chirps_organizado <- here::here("output/amacro/data/stations_chirps/organized")
 
 # # 3. Disparar o download
 # obter_chirps_para_bacias(bacias_sf = bacias_sf, dir_saida = pasta_chirps_organizado, 
@@ -397,9 +417,49 @@ pasta_chirps_organizado <- here::here("output/xingu_river/data/stations_chirps/o
 
 # 3. Roda a extração
 processar_rasters_chirps_mensal(
-  dir_rasters = "input/xingu_river/chirps_gee",
+  dir_rasters = "input/amacro/chirps_anual_stack",
   bacias_sf   = bacias_cumulativas_todas,
   dir_saida   = pasta_chirps_organizado
+)
+
+
+# ----------------------------------------------------------------------------
+# 3. CONSOLIDANDO AS GEOMETRIAS SOBREPOSTAS
+# ----------------------------------------------------------------------------
+
+# Configuração dos caminhos
+pasta_vazao_ana  <- here::here("output/amacro/data/stations_discharge_organized") # Ajuste para a sua pasta da ANA
+pasta_chuva_gee  <- here::here("output/amacro/data/stations_chirps/organized")
+pasta_resultados <- here::here("output/amacro/results")
+
+# Executa o modelo
+tabela_reportagem <- analisar_residual_hidrologico(
+  dir_vazao  = pasta_vazao_ana,
+  col_vazao  = "stream_flow_m3_s", # Insira o nome correto da coluna do seu parquet da ANA
+  dir_chirps = pasta_chuva_gee,
+  dir_saida  = pasta_resultados
+)
+
+# Dispara a geração
+gerar_graficos_reportagem(
+  caminho_resultado = here::here("output/amacro/results/residual_hidrologico_consolidado.parquet"),
+  dir_saida         = here::here("output/amacro/results/plots")
+)
+
+
+# Caminhos dos arquivos
+caminho_parquet <- here::here("output/amacro/results/residual_hidrologico_consolidado.parquet")
+caminho_gpkg    <- here::here("output/amacro/data/estacoes_analise.gpkg")
+dir_graficos    <- here::here("output/amacro/results/plots_consolidados")
+
+# (Opcional) Carrega hidrografia para enfeitar o mapa
+# rios <- st_read(here::here("output/nomedorun/data/rede_drenagem.gpkg"))
+
+gerar_visao_consolidada(
+  caminho_resultado   = caminho_parquet,
+  caminho_estacoes_sf = estacoes_snap,
+  dir_saida           = dir_graficos
+  # rios_sf           = rios  # Descomente se for usar o fundo dos rios
 )
 
 # -----------------------------------------------------------------------------
