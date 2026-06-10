@@ -611,4 +611,11 @@ gerar_visao_consolidada <- function(caminho_resultado, caminho_estacoes_sf, dir_
   ggsave(path(dir_saida, "consolidado_mapa_elasticidade.png"), plot = g_mapa, width = 9, height = 9, dpi = 300, bg = "white")
   
   message(sprintf("Sucesso! Visões consolidadas guardadas em: %s", dir_saida))
+  
+  # Retorna os objetos para serem usados no relatório RMarkdown
+  return(list(
+    df_resumo = df_resumo,
+    plot_scatter = g_scatter,
+    plot_mapa = g_mapa
+  ))
 }

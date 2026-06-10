@@ -374,11 +374,18 @@ for (i in seq_along(codigos_estacoes)) {
     
     # Verifica se o raster não está vazio (pode acontecer se o snap falhou drasticamente)
     # if (global(r_bacia, "not_na")$not_na > 0) {
-      poligono_sf <- as.polygons(r_bacia) |> 
-        st_as_sf() |> 
-        st_transform(4326) |>             # Converte para WGS84 para o CHIRPS
-        mutate(station_code = cod) |>     # Injeta o ID correto
-        select(station_code, geometry)
+    poligono_sf <- as.polygons(r_bacia) |>
+      st_as_sf() |>
+      st_transform(4326) |>
+      mutate(
+        station_code    = cod,
+        # Área calculada ainda em projeção plana — reprojetamos só para o cálculo
+        area_contrib_km2 = as.numeric(
+          st_area(st_transform(geometry, crs(r_bacia)))
+        ) / 1e6
+      ) |>
+      select(station_code, area_contrib_km2, geometry)
+    
       
       lista_bacias[[cod]] <- poligono_sf
     # } else {
@@ -394,12 +401,23 @@ message("\n[Consolidando polígonos e salvando produto final...]")
 
 bacias_cumulativas_todas <- bind_rows(lista_bacias)
 
+estacoes_snap <- estacoes_snap |>
+  left_join(
+    bacias_cumulativas_todas |>
+      st_drop_geometry() |>
+      select(station_code, area_contrib_km2),
+    by = "station_code"
+  )
+
+st_write(estacoes_snap, snap_path, delete_dsn = TRUE, quiet = TRUE)
+
 # Salva o arquivo final com todas as bacias cumulativas
 st_write(
   bacias_cumulativas_todas, 
   here::here("output/amacro/data/bacias_contribuicao_cumulativa.gpkg"),
   delete_dsn = TRUE
 )
+
 
 # Limpa a pasta temporária para poupar espaço em disco
 dir_delete(dir_tmp)
@@ -462,7 +480,169 @@ gerar_visao_consolidada(
   # rios_sf           = rios  # Descomente se for usar o fundo dos rios
 )
 
+### 2. Integração no Fim do Orquestrador Principal
+## TODO - desenvolver essa parte para que, após gerar a visão consolidada, os gráficos sejam incorporados ao relatório final.
+# =============================================================================
+# 5. GERAÇÃO DO RELATÓRIO INTEGRADO PARA A REPORTAGEM
+# =============================================================================
+library(rmarkdown)
+
+message("\n====== COMPILANDO RELATÓRIO INTEGRADO FINAL (PDF) ======")
+
+# 1. Recupera a tabela resumo e dados empilhados da variável ativa (ex: vazão)
+cfg_ativa      <- VARIABLE_CONFIGS[[VARIAVEIS_ATIVAS[1]]]
+var_resultados <- resultados_por_variavel[[cfg_ativa$id]]
+
+# 2. Roda a visão consolidada e CAPTURA os resultados
+# (Ajuste os caminhos conforme o seu script)
+resultados_consolidados <- gerar_visao_consolidada(
+  caminho_resultado   = caminho_parquet,
+  caminho_estacoes_sf = estacoes_snap,
+  dir_saida           = dir_graficos
+)
+
+# 3. Faz o join usando o dataframe que foi retornado na lista
+df_tabela_enriquecida <- var_resultados$tabela_resumo |> 
+  left_join(resultados_consolidados$df_resumo, by = "station_code") 
+
+# 4. Consolida todos os gráficos em uma única lista para o Rmd
+lista_graficos_relatorio <- list(
+  disponibilidade            = var_resultados$dados_selecionados$plot,
+  tendencias_estacoes        = var_resultados$graficos$tendencias_estacoes,
+  tendencias_classificadas   = var_resultados$graficos$tendencias_classificadas,
+  contagens_tendencia        = var_resultados$graficos$contagens_tendencia,
+  mapa_tendencia_hidrologica = var_resultados$graficos$mapa_tendencia_hidrologica,
+  
+  # Puxa os gráficos retornados pela nova função
+  consolidado_scatter        = resultados_consolidados$plot_scatter,
+  consolidado_mapa           = resultados_consolidados$plot_mapa
+)
+
+# =============================================================================
+# RENDERIZAÇÃO DO RELATÓRIO INTEGRADO — substitui a Seção 5 do main.R
+# =============================================================================
+#
+# Cole este bloco no final do orquestrador (main.R), após a etapa de
+# sazonalidade e a execução do módulo residual_hidrologico.
+#
+# Pré-requisitos (já devem ter rodado antes deste bloco):
+#   - resultados_por_variavel  (Seção 4)
+#   - consolidado              (Seção 5)
+#   - analysed_stations        (Seção 6)
+#   - estacoes_snap            (Etapa DEM / Seção 10)
+#   - tabela_reportagem        (analisar_residual_hidrologico)
+#   - df_sazonalidade          (processar_sazonalidade_pipeline — discharge)
+#   - area_estudo, rios        (Seção 3)
+# =============================================================================
+
+message("\n====== COMPILANDO RELATÓRIO INTEGRADO FINAL ======")
+
 # -----------------------------------------------------------------------------
+# 1. Recupera o dataframe de sazonalidade de vazão (já processado na Seção 9)
+#    Se você rodou o walk() da sazonalidade, o objeto não fica no ambiente
+#    global — lemos direto do parquet salvo.
+# -----------------------------------------------------------------------------
+path_saz_discharge <- path(
+  dirs$consolidated_dir,
+  paste0(RUN_NAME, "_sazonalidade_anual_discharge.parquet")
+)
+
+df_sazonalidade_discharge <- if (file_exists(path_saz_discharge)) {
+  read_parquet(path_saz_discharge)
+} else {
+  message("Aviso: parquet de sazonalidade de vazão não encontrado. ",
+          "A seção de sazonalidade do relatório ficará vazia.")
+  NULL
+}
+
+# -----------------------------------------------------------------------------
+# 2. Recupera o dataframe de residual CHIRPS×ANA
+#    (gerado por analisar_residual_hidrologico)
+# -----------------------------------------------------------------------------
+path_residual <- path(
+  dirs$output_dir, "results",
+  "residual_hidrologico_consolidado.parquet"
+)
+
+df_residual_chirps <- if (file_exists(path_residual)) {
+  read_parquet(path_residual)
+} else {
+  message("Aviso: parquet de residual hidrológico não encontrado. ",
+          "A seção CHIRPS do relatório ficará vazia.")
+  NULL
+}
+
+# -----------------------------------------------------------------------------
+# 3. Garante que estacoes_snap existe no ambiente
+#    (gerado na etapa DEM; se não rodou, tenta ler do disco)
+# -----------------------------------------------------------------------------
+if (!exists("estacoes_snap") || is.null(estacoes_snap)) {
+  snap_path_disco <- path(dirs$data_dir, paste0(RUN_NAME, "_snapped_stations.gpkg"))
+  
+  estacoes_snap <- if (file_exists(snap_path_disco)) {
+    st_read(snap_path_disco, quiet = TRUE)
+  } else {
+    message("Aviso: estacoes_snap não encontrado. ",
+            "Agrupamento por posicao_rede não estará disponível.")
+    NULL
+  }
+}
+
+# -----------------------------------------------------------------------------
+# 4. Renderiza o relatório
+# -----------------------------------------------------------------------------
+caminho_template  <- here("relatorio_integrado.Rmd")
+dir_saida_relat   <- path(dirs$output_dir, "results")
+dir_create(dir_saida_relat)
+
+arquivo_pdf <- paste0("relatorio_integrado_", RUN_NAME, ".pdf")
+
+rmarkdown::render(
+  input       = caminho_template,
+  output_file = arquivo_pdf,
+  output_dir  = dir_saida_relat,
+  params      = list(
+    resultados_por_variavel = resultados_por_variavel,
+    consolidado             = consolidado,
+    df_sazonalidade         = df_sazonalidade_discharge,
+    df_residual             = df_residual_chirps,
+    estacoes_snap           = estacoes_snap,
+    area_estudo             = area_estudo,
+    rios                    = rios,
+    run_name                = RUN_NAME
+  ),
+  envir  = new.env(parent = globalenv()),
+  quiet  = FALSE   # mude para TRUE em produção
+)
+
+message(sprintf(
+  "\n[Relatório] PDF gerado com sucesso: %s/%s",
+  dir_saida_relat, arquivo_pdf
+))
+
+
+# 
+# # 5. Renderiza o PDF
+# caminho_template_rmd <- here::here("relatorio_integrado.Rmd")
+# arquivo_saida_pdf    <- sprintf("relatorio_final_integrado_%s_%s.pdf", cfg_ativa$id, RUN_NAME)
+# diretorio_saida_pdf  <- path(dirs$output_dir, "results")
+# 
+# render(
+#   input       = caminho_template_rmd,
+#   output_file = arquivo_saida_pdf,
+#   output_dir  = diretorio_saida_pdf,
+#   params = list(
+#     graficos = lista_graficos_relatorio,
+#     cfg      = cfg_ativa,
+#     tabela   = df_tabela_enriquecida,
+#     run_name = RUN_NAME
+#   ),
+#   envir = new.env(parent = globalenv())
+# )
+# 
+# message(sprintf("Sucesso! Relatório PDF gerado em: %s/%s", diretorio_saida_pdf, arquivo_saida_pdf))
+# # -----------------------------------------------------------------------------
+
 # 10. VERIFICAÇÃO FINAL
 # -----------------------------------------------------------------------------
 message("\n====== PIPELINE CONCLUÍDO ======")

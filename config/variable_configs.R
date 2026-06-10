@@ -37,7 +37,7 @@ VARIABLE_CONFIGS <- list(
     unit_label   = "m³/s",                    # Usado em eixos de gráficos
     select_stations_params = list(
       mode          = "yearly",
-      maxMissing    = 100,
+      maxMissing    = 2,
       minYears      = 15,
       month         = 1,
       iniYear       = 2010,
@@ -58,7 +58,7 @@ VARIABLE_CONFIGS <- list(
     unit_label   = "cm",
     select_stations_params = list(
       mode          = "yearly",
-      maxMissing    = 100,
+      maxMissing    = 2,
       minYears      = 15,
       month         = 1,
       iniYear       = 2010,
@@ -79,7 +79,7 @@ VARIABLE_CONFIGS <- list(
     unit_label   = "mm",
     select_stations_params = list(
       mode          = "yearly",
-      maxMissing    = 100,
+      maxMissing    = 2,
       minYears      = 15,
       month         = 1,
       iniYear       = 2010,
