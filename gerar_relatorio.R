@@ -32,7 +32,7 @@ source(here("R/plots.R"))
 source(here("R/consolidate.R"))
 source(here("R/seasonality.R"))
 
-RUN_NAME         <- "amacro"
+RUN_NAME         <- "dourada"
 VARIAVEIS_ATIVAS <- c("discharge", "water_level", "precipitation")
 GERAR_GRAFICOS_TENDENCIA <- TRUE
 

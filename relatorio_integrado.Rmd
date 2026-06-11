@@ -27,6 +27,8 @@ params:
   area_estudo:             NULL
   # rios: sf de hidrografia (opcional, pode ser NULL)
   rios:                    NULL
+  # ano_inicio_saz: ano mínimo para os gráficos de sazonalidade
+  ano_inicio_saz:          1980
   # run_name: identificador do run
   run_name:                ""
 
@@ -81,6 +83,14 @@ CORES_TEND <- c(
 ORDEM_TEND <- c("Negativa", "Não significativa", "Positiva")
 ORDEM_REDE <- c("Rio principal", "Tributário principal", "Tributário secundário")
 
+# --- Intervalo de tempo de interesse para sazonalidade ---
+# Lido direto do VARIABLE_CONFIGS para manter consistência com o pipeline
+ANO_INICIO_SAZ <- if (exists("VARIABLE_CONFIGS") && !is.null(VARIABLE_CONFIGS[["discharge"]])) {
+  VARIABLE_CONFIGS[["discharge"]]$select_stations_params$iniYear
+} else {
+  2010  # fallback seguro
+}
+
 tema_relatorio <- theme_minimal(base_size = 10) +
   theme(
     plot.title      = element_text(face = "bold", size = 11),
@@ -106,6 +116,29 @@ tab_wl  <- if (!is.null(res_wl)) res_wl$tabela_resumo else NULL
 wide    <- params$consolidado$wide
 spatial <- params$consolidado$spatial
 
+# Achata colunas-lista que podem surgir do pivot_wider no parquet consolidado.
+# Qualquer coluna numérica armazenada como list<double> é convertida para double.
+achar_colunas_lista <- function(df) {
+  nomes <- names(df)[sapply(df, is.list)]
+  if (length(nomes) == 0) return(df)
+  for (col in nomes) {
+    vals <- tryCatch(
+      as.numeric(unlist(lapply(df[[col]], function(x) if (length(x) == 0) NA else x[1]))),
+      error = function(e) NA_real_
+    )
+    df[[col]] <- vals
+  }
+  df
+}
+
+if (!is.null(wide))    wide    <- achar_colunas_lista(wide)
+if (!is.null(spatial)) {
+  geom_col_name <- attr(spatial, "sf_column")  # nome real da coluna de geometria
+  geom_col      <- sf::st_geometry(spatial)
+  spatial_tbl   <- achar_colunas_lista(sf::st_drop_geometry(spatial))
+  spatial       <- sf::st_set_geometry(spatial_tbl, geom_col)
+}
+
 df_saz  <- params$df_sazonalidade    # anual por estação
 df_res  <- params$df_residual        # residual CHIRPS × ANA
 snap    <- params$estacoes_snap      # sf com posicao_rede, area_contrib_km2
@@ -114,46 +147,59 @@ rios_sf <- params$rios
 
 run_name <- params$run_name
 
-# --- Enriquecimento da camada espacial com posicao_rede ---
-# (snap pode ter atributos que spatial não tem)
-if (!is.null(snap) && !is.null(spatial)) {
+# --- Limpa prefixo no station_code da sazonalidade (ex: "amacro_15400000" -> "15400000") ---
+if (!is.null(df_saz) && "station_code" %in% names(df_saz)) {
+  df_saz <- df_saz |>
+    dplyr::mutate(station_code = sub(paste0("^", run_name, "_"), "", station_code))
+}
+
+# --- Extrai atributos do snap (posicao_rede, area_contrib_km2) ---
+snap_attr <- NULL
+if (!is.null(snap)) {
   snap_attr <- snap |>
     sf::st_drop_geometry() |>
     dplyr::select(station_code,
                   dplyr::any_of(c("posicao_rede", "area_contrib_km2",
-                                   "ordem_strahler", "dist_exutorio_km")))
+                                   "ordem_strahler", "dist_exutorio_km"))) |>
+    # Limpa prefixo também no snap, por precaução
+    dplyr::mutate(station_code = sub(paste0("^", run_name, "_"), "", station_code))
+}
 
-  spatial <- spatial |>
-    dplyr::left_join(snap_attr, by = "station_code")
-
-  # Garante fator ordenado
+# --- Enriquecimento do spatial com posicao_rede ---
+if (!is.null(snap_attr) && !is.null(spatial)) {
+  spatial <- spatial |> dplyr::left_join(snap_attr, by = "station_code")
   if ("posicao_rede" %in% names(spatial)) {
     spatial$posicao_rede <- factor(spatial$posicao_rede, levels = ORDEM_REDE)
   }
 }
 
-# --- Join da tabela principal com posicao_rede ---
-if (!is.null(snap)) {
-  snap_tbl <- snap |>
-    sf::st_drop_geometry() |>
-    dplyr::select(station_code,
-                  dplyr::any_of(c("posicao_rede", "area_contrib_km2",
-                                   "ordem_strahler", "dist_exutorio_km")))
-
-  tab_q <- tab_q |> dplyr::left_join(snap_tbl, by = "station_code")
+# --- Enriquecimento do wide com posicao_rede ---
+if (!is.null(snap_attr) && !is.null(wide)) {
+  wide <- wide |> dplyr::left_join(snap_attr, by = "station_code")
 }
 
-# --- Filtro de foco: apenas rios principais e tributários principais ---
+# --- Enriquecimento do tab_q com posicao_rede ---
+if (!is.null(snap_attr)) {
+  tab_q <- tab_q |> dplyr::left_join(snap_attr, by = "station_code")
+}
+
+# --- Determina se posicao_rede está disponível e com dados válidos ---
+TEM_POSICAO_REDE <- "posicao_rede" %in% names(tab_q) &&
+                    sum(!is.na(tab_q$posicao_rede)) > 0
+
+# --- Filtro de foco: rios principais e tributários principais ---
+# Se posicao_rede não disponível, usa todas as estações como foco
 POSICOES_FOCO <- c("Rio principal", "Tributário principal")
 
-tab_q_foco <- if ("posicao_rede" %in% names(tab_q)) {
+tab_q_foco <- if (TEM_POSICAO_REDE) {
   dplyr::filter(tab_q, posicao_rede %in% POSICOES_FOCO)
 } else {
   tab_q
 }
 
-spatial_foco <- if (!is.null(spatial) && "posicao_rede" %in% names(spatial)) {
-  dplyr::filter(spatial, posicao_rede %in% POSICOES_FOCO | is.na(posicao_rede))
+spatial_foco <- if (!is.null(spatial) && TEM_POSICAO_REDE &&
+                    "posicao_rede" %in% names(spatial)) {
+  dplyr::filter(spatial, posicao_rede %in% POSICOES_FOCO)
 } else {
   spatial
 }
@@ -302,7 +348,7 @@ Resultado: **`r n_neg_q` com tendência negativa significativa (`r pct_neg_q`%)*
 ## Distribuição das tendências por posição na rede
 
 ```{r barplot_tendencias, fig.width=7, fig.height=3.5, fig.cap="Distribuição das categorias de tendência de vazão por posição na rede hidrográfica."}
-if ("posicao_rede" %in% names(tab_q)) {
+if (TEM_POSICAO_REDE) {
 
   contagem_tend <- tab_q |>
     dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
@@ -318,8 +364,7 @@ if ("posicao_rede" %in% names(tab_q)) {
   p_barplot <- ggplot(contagem_tend,
     aes(x = tendencia, y = n, fill = tendencia)) +
     geom_col(width = 0.65, show.legend = FALSE) +
-    geom_text(aes(label = label_bar),
-              vjust = -0.2, size = 2.8, lineheight = 0.9) +
+    geom_text(aes(label = label_bar), vjust = -0.2, size = 2.8, lineheight = 0.9) +
     facet_wrap(~posicao_rede, ncol = 2) +
     scale_fill_manual(values = CORES_TEND) +
     scale_y_continuous(expand = expansion(mult = c(0, 0.25))) +
@@ -328,8 +373,30 @@ if ("posicao_rede" %in% names(tab_q)) {
     tema_relatorio +
     theme(panel.grid.major.x = element_blank())
 
-  print(p_barplot)
+} else {
+
+  # Fallback sem agrupamento
+  contagem_tend <- tab_q_foco |>
+    dplyr::count(tendencia) |>
+    dplyr::mutate(
+      prop      = n / sum(n),
+      label_bar = paste0(n, "\n(", round(prop * 100), "%)"),
+      tendencia = factor(tendencia, levels = ORDEM_TEND)
+    )
+
+  p_barplot <- ggplot(contagem_tend,
+    aes(x = tendencia, y = n, fill = tendencia)) +
+    geom_col(width = 0.5, show.legend = FALSE) +
+    geom_text(aes(label = label_bar), vjust = -0.2, size = 3, lineheight = 0.9) +
+    scale_fill_manual(values = CORES_TEND) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.25))) +
+    labs(x = NULL, y = "Nº de estações",
+         caption = "Agrupamento por posição na rede não disponível.") +
+    tema_relatorio +
+    theme(panel.grid.major.x = element_blank())
 }
+
+print(p_barplot)
 ```
 
 \FloatBarrier
@@ -337,7 +404,7 @@ if ("posicao_rede" %in% names(tab_q)) {
 ## Força e direção das tendências (Slope de Sen)
 
 ```{r boxplot_slope, fig.width=7, fig.height=3.5, fig.cap="Distribuição do Slope de Sen (m³/s/ano) por posição na rede. Valores negativos indicam decaimento. Pontos são estações individuais."}
-if ("posicao_rede" %in% names(tab_q)) {
+if (TEM_POSICAO_REDE) {
 
   tab_box <- tab_q |>
     dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
@@ -348,26 +415,38 @@ if ("posicao_rede" %in% names(tab_q)) {
 
   p_box <- ggplot(tab_box,
     aes(x = posicao_rede, y = slope_sen, fill = posicao_rede)) +
-    geom_hline(yintercept = 0, linetype = "dashed",
-               color = "gray50", linewidth = 0.5) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.5) +
     geom_boxplot(alpha = 0.5, outlier.shape = NA, width = 0.5) +
-    geom_jitter(aes(color = tendencia), width = 0.15,
-                size = 2, alpha = 0.8) +
+    geom_jitter(aes(color = tendencia), width = 0.15, size = 2, alpha = 0.8) +
     scale_fill_manual(
-      values = c("Rio principal" = "#264653",
-                 "Tributário principal" = "#e76f51"),
+      values = c("Rio principal" = "#264653", "Tributário principal" = "#e76f51"),
       guide  = "none"
     ) +
     scale_color_manual(values = CORES_TEND, name = "Tendência") +
-    labs(
-      x       = NULL,
-      y       = "Slope de Sen (m³/s/ano)",
-      caption = "Cada ponto é uma estação. Linha tracejada = zero (sem mudança)."
-    ) +
+    labs(x = NULL, y = "Slope de Sen (m³/s/ano)",
+         caption = "Cada ponto é uma estação. Linha tracejada = zero (sem mudança).") +
     tema_relatorio
 
-  print(p_box)
+} else {
+
+  # Fallback: barplot horizontal com slope por estação, ordenado
+  tab_box <- tab_q_foco |>
+    dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND)) |>
+    dplyr::arrange(slope_sen)
+
+  p_box <- ggplot(tab_box,
+    aes(x = reorder(station_code, slope_sen), y = slope_sen, fill = tendencia)) +
+    geom_col() +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+    coord_flip() +
+    scale_fill_manual(values = CORES_TEND, name = "Tendência") +
+    labs(x = NULL, y = "Slope de Sen (m³/s/ano)",
+         caption = "Ordenado por magnitude. Barras vermelhas = tendência negativa significativa.") +
+    tema_relatorio +
+    theme(axis.text.y = element_text(size = 7))
 }
+
+print(p_box)
 ```
 
 \FloatBarrier
@@ -481,94 +560,89 @@ a diferença entre cheia e seca) e a **duração da seca estrita** (quantos dias
 consecutivos o rio ficou abaixo de seu limiar crítico).
 
 ```{r prep_sazonalidade}
-# Prepara e filtra o dataframe de sazonalidade
 df_saz_foco <- NULL
 
 if (!is.null(df_saz) && nrow(df_saz) > 0) {
 
-  # Junta com posicao_rede se disponível
-  if (!is.null(snap)) {
-    snap_tbl2 <- snap |>
-      sf::st_drop_geometry() |>
-      dplyr::select(station_code,
-                    dplyr::any_of(c("posicao_rede", "area_contrib_km2")))
+  # Estações que passaram pela análise (fonte: long consolidado, sem prefixo)
+  codigos_com_analise <- unique(params$consolidado$long$station_code)
 
-    df_saz_foco <- df_saz |>
-      dplyr::left_join(snap_tbl2, by = "station_code")
-  } else {
-    df_saz_foco <- df_saz
+  df_saz_proc <- df_saz |>
+    # Remove prefixo do pipeline (ex: "amacro_15400000" -> "15400000")
+    dplyr::mutate(
+      station_code = sub(paste0("^", run_name, "_"), "", station_code)
+    ) |>
+    # Filtra apenas estações que têm análise de vazão
+    dplyr::filter(station_code %in% codigos_com_analise) |>
+    # Filtra intervalo de tempo de interesse
+    dplyr::filter(hydro_year >= ANO_INICIO_SAZ)
+
+  # Junta posicao_rede via snap_attr
+  if (!is.null(snap_attr)) {
+    df_saz_proc <- df_saz_proc |>
+      dplyr::left_join(
+        snap_attr |>
+          dplyr::select(station_code,
+                        dplyr::any_of(c("posicao_rede", "area_contrib_km2"))),
+        by = "station_code"
+      )
   }
 
-  # Filtra para estações de foco
-  if ("posicao_rede" %in% names(df_saz_foco)) {
-    df_saz_foco <- df_saz_foco |>
+  # Filtra para estações de foco se posicao_rede disponível
+  if (TEM_POSICAO_REDE && "posicao_rede" %in% names(df_saz_proc)) {
+    df_saz_foco <- df_saz_proc |>
       dplyr::filter(posicao_rede %in% POSICOES_FOCO)
+  } else {
+    df_saz_foco <- df_saz_proc
   }
+
+  message(sprintf(
+    "Sazonalidade: %d linhas | %d estações | %d a %d",
+    nrow(df_saz_foco),
+    dplyr::n_distinct(df_saz_foco$station_code),
+    min(df_saz_foco$hydro_year, na.rm = TRUE),
+    max(df_saz_foco$hydro_year, na.rm = TRUE)
+  ))
 }
 ```
 
 ## Evolução da Duração da Seca (Q90)
 
-O gráfico abaixo mostra, para cada quinquênio, como a distribuição dos *dias
-consecutivos abaixo do limiar crítico* mudou ao longo do tempo. Um deslocamento
-para a direita indica secas mais longas e ininterruptas.
+O gráfico abaixo mostra, ano a ano, como a duração máxima dos períodos de seca
+estrita evoluiu nas estações de foco. A linha representa a mediana e a faixa o
+intervalo interquartil entre estações.
 
-```{r ridgeline_seca, fig.width=7, fig.height=4.5, fig.cap="Distribuição da duração máxima da seca estrita (dias consecutivos abaixo do Q90 histórico) por quinquênio. Deslocamento para a direita indica secas mais prolongadas."}
-if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco)) {
+```{r ridgeline_seca, fig.width=7, fig.height=4, fig.cap="Evolução anual da duração máxima da seca estrita (dias consecutivos abaixo do Q90 histórico). Linha = mediana entre estações de foco. Faixa = IQR. Tendência LOESS em vermelho."}
+if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco) &&
+    nrow(df_saz_foco) > 0) {
 
-  # Instala ggridges se necessário (incluir no setup.R do projeto)
-  if (!requireNamespace("ggridges", quietly = TRUE)) {
-    # Fallback: boxplot por quinquênio
-    df_ridge <- df_saz_foco |>
-      dplyr::mutate(
-        quinquenio = paste0(
-          floor(hydro_year / 5) * 5, "–",
-          floor(hydro_year / 5) * 5 + 4
-        )
-      ) |>
-      dplyr::filter(!is.na(duracao_seca_q90))
+  df_seca_anual <- df_saz_foco |>
+    dplyr::filter(!is.na(duracao_seca_q90)) |>
+    dplyr::group_by(hydro_year) |>
+    dplyr::summarise(
+      med_seca = median(duracao_seca_q90, na.rm = TRUE),
+      q25_seca = quantile(duracao_seca_q90, 0.25, na.rm = TRUE),
+      q75_seca = quantile(duracao_seca_q90, 0.75, na.rm = TRUE),
+      n_est    = dplyr::n(),
+      .groups  = "drop"
+    )
 
-    p_seca <- ggplot(df_ridge,
-      aes(x = quinquenio, y = duracao_seca_q90, fill = quinquenio)) +
-      geom_boxplot(alpha = 0.7, outlier.size = 0.8,
-                   show.legend = FALSE) +
-      scale_fill_viridis_d(option = "magma", direction = -1) +
-      labs(
-        x       = "Quinquênio",
-        y       = "Dias consecutivos abaixo do Q90",
-        caption = "Cada observação é um ano-estação. Estações de foco."
-      ) +
-      tema_relatorio +
-      theme(axis.text.x = element_text(angle = 35, hjust = 1))
+  p_seca <- ggplot(df_seca_anual, aes(x = hydro_year, y = med_seca)) +
+    geom_ribbon(aes(ymin = q25_seca, ymax = q75_seca),
+                fill = "#d6604d", alpha = 0.2) +
+    geom_line(color = "#d6604d", linewidth = 0.9) +
+    geom_point(color = "#d6604d", size = 1.8, alpha = 0.8) +
+    geom_smooth(method = "loess", se = FALSE,
+                color = "#7f0000", linewidth = 0.7, linetype = "dashed") +
+    scale_x_continuous(breaks = scales::breaks_pretty(n = 8)) +
+    labs(
+      x       = "Ano hidrológico",
+      y       = "Dias consecutivos abaixo do Q90",
+      caption = "Mediana das estações de foco. Faixa = IQR. Tracejado = tendência LOESS."
+    ) +
+    tema_relatorio
 
-    print(p_seca)
-
-  } else {
-    library(ggridges)
-
-    df_ridge <- df_saz_foco |>
-      dplyr::mutate(
-        quinquenio = paste0(
-          floor(hydro_year / 5) * 5, "–",
-          floor(hydro_year / 5) * 5 + 4
-        )
-      ) |>
-      dplyr::filter(!is.na(duracao_seca_q90))
-
-    p_seca <- ggplot(df_ridge,
-      aes(x = duracao_seca_q90, y = quinquenio, fill = quinquenio)) +
-      geom_density_ridges(alpha = 0.75, rel_min_height = 0.01,
-                          show.legend = FALSE) +
-      scale_fill_viridis_d(option = "magma", direction = -1) +
-      labs(
-        x       = "Dias consecutivos abaixo do Q90",
-        y       = "Quinquênio",
-        caption = "Cada observação é um ano-estação. Estações de foco."
-      ) +
-      tema_relatorio
-
-    print(p_seca)
-  }
+  print(p_seca)
 }
 ```
 
@@ -664,39 +738,66 @@ que a diferença entre a cheia e a seca está se intensificando — o rio oscila
 
 ```{r amplitude_temporal, fig.width=7, fig.height=4, fig.cap="Evolução da amplitude relativa mediana por posição na rede (linhas) com intervalo interquartil (faixa). Tendência suavizada por LOESS."}
 if (!is.null(df_saz_foco) && "amplitude_rel" %in% names(df_saz_foco) &&
-    "posicao_rede" %in% names(df_saz_foco)) {
+    nrow(df_saz_foco) > 0) {
 
-  df_amp <- df_saz_foco |>
-    dplyr::filter(!is.na(amplitude_rel), !is.na(posicao_rede)) |>
-    dplyr::group_by(hydro_year, posicao_rede) |>
-    dplyr::summarise(
-      med_amp = median(amplitude_rel, na.rm = TRUE),
-      q25_amp = quantile(amplitude_rel, 0.25, na.rm = TRUE),
-      q75_amp = quantile(amplitude_rel, 0.75, na.rm = TRUE),
-      .groups = "drop"
-    )
+  tem_pos_amp <- TEM_POSICAO_REDE && "posicao_rede" %in% names(df_saz_foco) &&
+                 sum(!is.na(df_saz_foco$posicao_rede)) > 0
 
-  cores_pos <- c(
-    "Rio principal"        = "#264653",
-    "Tributário principal" = "#e76f51"
-  )
+  if (tem_pos_amp) {
 
-  p_amp <- ggplot(df_amp,
-    aes(x = hydro_year, y = med_amp,
-        color = posicao_rede, fill = posicao_rede)) +
-    geom_ribbon(aes(ymin = q25_amp, ymax = q75_amp),
-                alpha = 0.2, color = NA) +
-    geom_line(linewidth = 0.8) +
-    geom_smooth(method = "loess", se = FALSE,
-                linewidth = 0.5, linetype = "dashed") +
-    scale_color_manual(values = cores_pos, name = "Posição") +
-    scale_fill_manual(values  = cores_pos, name = "Posição") +
-    labs(
-      x       = "Ano hidrológico",
-      y       = "Amplitude relativa (adimensional)",
-      caption = "Linha sólida = mediana. Faixa = IQR. Tracejado = tendência LOESS."
-    ) +
-    tema_relatorio
+    df_amp <- df_saz_foco |>
+      dplyr::filter(!is.na(amplitude_rel), !is.na(posicao_rede)) |>
+      dplyr::group_by(hydro_year, posicao_rede) |>
+      dplyr::summarise(
+        med_amp = median(amplitude_rel, na.rm = TRUE),
+        q25_amp = quantile(amplitude_rel, 0.25, na.rm = TRUE),
+        q75_amp = quantile(amplitude_rel, 0.75, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    cores_pos <- c("Rio principal" = "#264653", "Tributário principal" = "#e76f51")
+
+    p_amp <- ggplot(df_amp,
+      aes(x = hydro_year, y = med_amp,
+          color = posicao_rede, fill = posicao_rede)) +
+      geom_ribbon(aes(ymin = q25_amp, ymax = q75_amp), alpha = 0.2, color = NA) +
+      geom_line(linewidth = 0.8) +
+      geom_smooth(method = "loess", se = FALSE, linewidth = 0.5, linetype = "dashed") +
+      scale_color_manual(values = cores_pos, name = "Posição") +
+      scale_fill_manual(values  = cores_pos, name = "Posição") +
+      labs(
+        x       = "Ano hidrológico",
+        y       = "Amplitude relativa (adimensional)",
+        caption = "Linha sólida = mediana. Faixa = IQR. Tracejado = tendência LOESS."
+      ) +
+      tema_relatorio
+
+  } else {
+
+    # Fallback: série agregada de todas as estações sem agrupamento
+    df_amp <- df_saz_foco |>
+      dplyr::filter(!is.na(amplitude_rel)) |>
+      dplyr::group_by(hydro_year) |>
+      dplyr::summarise(
+        med_amp = median(amplitude_rel, na.rm = TRUE),
+        q25_amp = quantile(amplitude_rel, 0.25, na.rm = TRUE),
+        q75_amp = quantile(amplitude_rel, 0.75, na.rm = TRUE),
+        .groups = "drop"
+      )
+
+    p_amp <- ggplot(df_amp, aes(x = hydro_year, y = med_amp)) +
+      geom_ribbon(aes(ymin = q25_amp, ymax = q75_amp),
+                  fill = "#264653", alpha = 0.2) +
+      geom_line(color = "#264653", linewidth = 0.8) +
+      geom_smooth(method = "loess", se = FALSE,
+                  color = "#d73027", linewidth = 0.5, linetype = "dashed") +
+      labs(
+        x       = "Ano hidrológico",
+        y       = "Amplitude relativa (adimensional)",
+        caption = "Mediana de todas as estações de foco. Faixa = IQR. Tracejado = tendência LOESS."
+      ) +
+      tema_relatorio
+  }
 
   print(p_amp)
 }
@@ -777,45 +878,56 @@ if (!is.null(spatial) && "tendencia_precipitation" %in% names(spatial)) {
 
 ## Comparativo: tendências de vazão versus precipitação
 
-```{r scatter_q_vs_p, fig.width=7, fig.height=4, fig.cap="Comparativo entre o Slope de Sen de vazão (eixo Y) e de precipitação (eixo X) para estações com dados de ambas as variáveis. Estações abaixo da linha diagonal perderam mais vazão do que a chuva justificaria."}
-if (!is.null(wide) &&
-    "slope_sen_discharge" %in% names(wide) &&
-    "slope_sen_precipitation" %in% names(wide)) {
+```{r scatter_q_vs_p, fig.width=7, fig.height=4, fig.cap="Comparativo regional entre as distribuições do Slope de Sen de vazão e precipitação. Como as redes fluviométrica e pluviométrica cobrem locais distintos, a comparação é feita pela distribuição regional agregada."}
 
-  df_comp <- wide |>
-    dplyr::filter(
-      !is.na(slope_sen_discharge),
-      !is.na(slope_sen_precipitation)
-    ) |>
+# As redes fluviométrica e pluviométrica da ANA têm códigos distintos —
+# não há estações com dados de ambas as variáveis simultaneamente.
+# Comparamos as distribuições regionais dos slopes.
+
+tem_ambos <- !is.null(tab_q_foco) && nrow(tab_q_foco) > 0 &&
+             !is.null(tab_p)       && nrow(tab_p) > 0
+
+if (tem_ambos) {
+
+  df_dist <- dplyr::bind_rows(
+    tab_q_foco |>
+      dplyr::select(station_code, slope_sen, tendencia) |>
+      dplyr::mutate(variavel = "Vazão (m³/s/ano)"),
+    tab_p |>
+      dplyr::select(station_code, slope_sen, tendencia) |>
+      dplyr::mutate(variavel = "Precipitação (mm/mês/ano)")
+  ) |>
+    dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND))
+
+  # Normaliza os slopes para comparação numa escala comum (z-score por variável)
+  df_dist <- df_dist |>
+    dplyr::group_by(variavel) |>
     dplyr::mutate(
-      tendencia_q = dplyr::coalesce(tendencia_discharge, "Não significativa"),
-      tendencia_q = factor(tendencia_q, levels = ORDEM_TEND)
-    )
+      slope_norm = (slope_sen - mean(slope_sen, na.rm = TRUE)) /
+                   sd(slope_sen, na.rm = TRUE)
+    ) |>
+    dplyr::ungroup()
 
-  if ("posicao_rede" %in% names(df_comp)) {
-    df_comp <- dplyr::filter(df_comp, posicao_rede %in% POSICOES_FOCO)
-  }
+  p_comp <- ggplot(df_dist, aes(x = slope_norm, fill = tendencia)) +
+    geom_histogram(bins = 12, alpha = 0.75, position = "identity", color = "white") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
+    facet_wrap(~variavel, ncol = 2, scales = "free_x") +
+    scale_fill_manual(values = CORES_TEND, name = "Tendência") +
+    labs(
+      x       = "Slope de Sen padronizado (z-score)",
+      y       = "Nº de estações",
+      caption = paste0(
+        "Slopes padronizados para permitir comparação entre variáveis com unidades distintas.\n",
+        "Barras à esquerda do zero = tendência de queda. Cor = significância estatística."
+      )
+    ) +
+    tema_relatorio +
+    theme(panel.grid.major.x = element_blank())
 
-  if (nrow(df_comp) > 0) {
-    p_comp <- ggplot(df_comp,
-      aes(x = slope_sen_precipitation,
-          y = slope_sen_discharge,
-          color = tendencia_q)) +
-      geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
-      geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
-      geom_point(size = 3, alpha = 0.8) +
-      geom_text_repel(aes(label = station_code),
-                      size = 2.5, color = "gray30", max.overlaps = 12) +
-      scale_color_manual(values = CORES_TEND, name = "Tend. Vazão") +
-      labs(
-        x       = "Slope Sen — Precipitação (mm/mês/ano)",
-        y       = "Slope Sen — Vazão (m³/s/ano)",
-        caption = "Quadrante III (ambos negativos) = chuva e rio caindo juntos. Quadrante II = rio caindo mais que a chuva."
-      ) +
-      tema_relatorio
+  print(p_comp)
 
-    print(p_comp)
-  }
+} else if (!is.null(tab_q_foco) && nrow(tab_q_foco) > 0) {
+  message("Dados de precipitação não disponíveis para comparação.")
 }
 ```
 
@@ -1115,18 +1227,19 @@ kable(
 ## Síntese narrativa
 
 ```{r bloco_narrativa, results='asis'}
-# Gera parágrafos automaticamente a partir dos dados calculados
-n_seca_piorando <- if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco)) {
+n_seca_piorando <- if (!is.null(df_saz_foco) && nrow(df_saz_foco) > 0 &&
+                       "duracao_seca_q90" %in% names(df_saz_foco)) {
   df_saz_foco |>
     dplyr::filter(!is.na(duracao_seca_q90)) |>
     dplyr::group_by(station_code) |>
     dplyr::summarise(
-      slope_seca = tryCatch({
-        coef(lm(duracao_seca_q90 ~ hydro_year))[2]
-      }, error = function(e) NA_real_),
+      slope_seca = tryCatch(
+        coef(lm(duracao_seca_q90 ~ hydro_year))[2],
+        error = function(e) NA_real_
+      ),
       .groups = "drop"
     ) |>
-    dplyr::filter(slope_seca > 0.5) |>
+    dplyr::filter(!is.na(slope_seca) & slope_seca > 0.5) |>
     nrow()
 } else { NA }
 
@@ -1142,8 +1255,8 @@ estatisticamente significativa de queda na vazão (Mann-Kendall, p < 0,05).",
 
 if (!is.na(n_seca_piorando)) {
   cat(sprintf(
-    " Em relação à sazonalidade, **%d** estações mostram aumento na duração
-dos períodos de seca estrita (acima de 0,5 dias/ano), indicando que as estiagens
+    " Em relação à sazonalidade, **%d** estações de foco mostram aumento na duração
+dos períodos de seca estrita (tendência > 0,5 dias/ano), indicando que as estiagens
 estão se tornando mais longas e ininterruptas ao longo do período monitorado.",
     n_seca_piorando
   ))

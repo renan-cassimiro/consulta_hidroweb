@@ -57,7 +57,7 @@ setup_dirs <- function(run_name,
   
   dirs <- list(
     input_dir        = input_dir,
-    study_area_path  = path(input_dir, paste0("bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")),
+    study_area_path  = path(input_dir, paste0("bacia_amazonica_dourada_hybas_lake_sa_lev04_v1c_dissolvido.gpkg")),
     output_dir       = output_dir,
     report_dir       = path(output_dir, "report"),
     image_dir        = path(output_dir, "images"),

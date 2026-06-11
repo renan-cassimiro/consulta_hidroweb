@@ -68,8 +68,8 @@ source(here("functions/functions.R"))
 RUN_NAME <- "amacro"
 
 INPUT_DIR <- here("input", RUN_NAME)
-DEM_PATH <- path(INPUT_DIR, "amacro_fathomdem_300m.tif")
-STUDAY_AREA_PATH <- path(INPUT_DIR, "bacias_amacro_hybas_lake_sa_lev03_v1c_dissolvido.gpkg")
+DEM_PATH <- path(INPUT_DIR, "fathomdem_dourada_300m.tif")
+STUDAY_AREA_PATH <- path(INPUT_DIR, "bacia_amazonica_dourada_hybas_lake_sa_lev04_v1c_dissolvido.gpkg")
 
 OUTPUT_DIR <- here("output", RUN_NAME)
 DATA_DIR <- path(OUTPUT_DIR, "data")
@@ -189,7 +189,7 @@ wbt_extract_streams(flow_accum = D8_ACCUM, output = STREAMS_RAST, threshold = LI
 message("\n=== 4. Snap hidrológico das estações ===")
 
 # Carrega estações
-analysed_stations <- st_read_parquet(path(OUTPUT_DIR, "consolidated", "amacro_disponibilidade_spatial.parquet"))
+analysed_stations <- st_read_parquet(path(OUTPUT_DIR, "consolidated", "dourada_disponibilidade_spatial.parquet"))
 
 ###Filtrar por áreas de contribuição
 analysed_stations <- filter(analysed_stations, area_km2>10000)
