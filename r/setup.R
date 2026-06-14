@@ -29,7 +29,7 @@ library(zoo)
 library(ggtext) # Para subtítulos e formatação de texto avançada
 library(whitebox)
 library(ggrepel) # Para os nomes das estações não se sobreporem no gráfico
-
+library(terra)
 
 
 
@@ -57,15 +57,25 @@ setup_dirs <- function(run_name,
   
   dirs <- list(
     input_dir        = input_dir,
-    study_area_path  = path(input_dir, paste0("bacia_amazonica_dourada_hybas_lake_sa_lev04_v1c_dissolvido.gpkg")),
+    
+    # Camadas de entrada resolvidas dinamicamente:
+    study_area_path  = path(input_dir, INPUT_FILES$study_area_filename),
+    dem_path         = path(input_dir, INPUT_FILES$dem_filename),
+    chirps_dir       = path(input_dir, "chirps_anual_stack"),
+    
+    # Estrutura de saídas
+    output_dir       = output_dir,
     output_dir       = output_dir,
     report_dir       = path(output_dir, "report"),
     image_dir        = path(output_dir, "images"),
     data_dir         = path(output_dir, "data"),
-    consolidated_dir = path(output_dir, "consolidated")
+    consolidated_dir = path(output_dir, "consolidated"),
+    watershed_dir = path(output_dir, "watershed"),
+    temp_dir = path(output_dir, "temp")
+    
   )
   
-  # Cria os diretórios base
+  # Cria os diretórios base de saída
   walk(
     c(dirs$report_dir, dirs$image_dir, dirs$data_dir, dirs$consolidated_dir),
     dir_create, recurse = TRUE
@@ -85,5 +95,5 @@ setup_dirs <- function(run_name,
     )
   })
   
-  dirs
+  return(dirs)
 }

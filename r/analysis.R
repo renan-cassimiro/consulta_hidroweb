@@ -126,7 +126,7 @@ analisar_estacao <- function(df, station_code, value_col) {
 #'
 #' @return Lista de resultados, um por estação.
 # -----------------------------------------------------------------------------
-analisar_todas_estacoes <- function(estacoes_selecionadas, cfg) {
+analisar_todas_estacoes <- function(cfg, estacoes_selecionadas) {
   
   message(sprintf("[%s] Analisando %d estações...",
                   cfg$label, length(estacoes_selecionadas$series)))

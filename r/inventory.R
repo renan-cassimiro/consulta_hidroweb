@@ -18,14 +18,12 @@
 #'
 #' @param cfg           Lista de configuração da variável (de VARIABLE_CONFIGS).
 #' @param area_estudo   Objeto sf com o polígono da área de interesse.
-#' @param output_path   Caminho completo para salvar o inventário (.parquet).
 #' @param estacoes_filtradas sf ou NULL. Se fornecido, filtra por
 #'                           $CodigoEstacao. Default NULL (sem filtro).
 #'
 #' @return Objeto sf com o inventário de estações.
 # -----------------------------------------------------------------------------
-obter_inventario <- function(cfg, area_estudo, output_path,
-                             estacoes_filtradas = NULL) {
+obter_inventario <- function(cfg, area_estudo, estacoes_filtradas = NULL) {
   
   message(sprintf("[%s] Consultando inventário (stationType = '%s')...",
                   cfg$label, cfg$station_type))
@@ -43,10 +41,6 @@ obter_inventario <- function(cfg, area_estudo, output_path,
     message(sprintf("[%s] Filtro aplicado: %d → %d estações.",
                     cfg$label, n_antes, nrow(inventario)))
   }
-  
-  st_write_parquet(inventario, output_path, compression = "zstd")
-  message(sprintf("[%s] Inventário salvo: %d estações → %s",
-                  cfg$label, nrow(inventario), output_path))
   
   inventario
 }
