@@ -30,6 +30,7 @@ library(ggtext) # Para subtítulos e formatação de texto avançada
 library(whitebox)
 library(ggrepel) # Para os nomes das estações não se sobreporem no gráfico
 library(terra)
+library(rmarkdown)
 
 
 
@@ -64,7 +65,6 @@ setup_dirs <- function(run_name,
     chirps_dir       = path(input_dir, "chirps_anual_stack"),
     
     # Estrutura de saídas
-    output_dir       = output_dir,
     output_dir       = output_dir,
     report_dir       = path(output_dir, "report"),
     image_dir        = path(output_dir, "images"),

@@ -32,8 +32,8 @@ for (var_id in names(VARIABLE_CONFIGS)) {
     cfg        = cfg,
     inventario = inv,
     run_name   = RUN_NAME,
-    raw_dir    = var_dirs$raw_dir,
-    org_dir    = var_dirs$org_dir
+    raw_dir    = dirs$var_dirs$raw_dir,
+    org_dir    = dirs$var_dirs$org_dir
   )
   
   df_limpo <- selecionar_estacoes(cfg, df_bruto)
@@ -120,7 +120,6 @@ inventarios_list <- map(resultados_por_variavel, "inventario")
 
 consolidado <- consolidar_resultados(
   resumos_list    = resumos_list,
-  inventario_list = inventarios_list
-)
+  inventario_list = inventarios_list)
 
 salvar_consolidado(consolidado, dirs$consolidated_dir, RUN_NAME)

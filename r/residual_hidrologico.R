@@ -37,7 +37,7 @@ analisar_residual_hidrologico <- function(dir_vazao, col_vazao, dir_chirps, dir_
     estacao_cod <- path_ext_remove(path_file(f_chirps))
     
     #TODO retirar esse hard code
-    f_vazao <- path(dir_vazao, paste0("dourada_", estacao_cod, ".parquet"))
+    f_vazao <- path(dir_vazao, paste0(RUN_NAME, '_', estacao_cod, ".parquet"))
     
     # Só prossegue se tiver os dois dados para a mesma estação
     if (!file_exists(f_vazao)) {

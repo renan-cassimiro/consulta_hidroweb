@@ -1,11 +1,16 @@
-source("R/residual.R")
+source("R/residual_hidrologico.R")
+source("R/setup.R")
 
-# Carregar dados já processados nas etapas anteriores
-df_chirps <- arrow::read_parquet(paste0("output/", RUN_NAME, "/data/chirps_bacias.parquet"))
-df_vazao <- arrow::read_parquet(paste0("output/", RUN_NAME, "/data/discharge_limpo.parquet"))
+dirs <- setup_dirs(run_name = RUN_NAME)
 
-# Calcular Residual
-df_residual <- analisar_residual_hidrologico(df_chirps, df_vazao)
+# Sugestão: crie uma "variável falsa" na sua arquitetura chamada "chirps"
+pasta_chirps_organizado <- here::here(dirs$data_dir, "stations_chirps", "organized")
+pasta_resultados <- here::here(dirs$data_dir, "results")
 
-# Salvar
-arrow::write_parquet(df_residual, paste0("output/", RUN_NAME, "/results/residual.parquet"))
+# Executa o modelo
+tabela_reportagem <- analisar_residual_hidrologico(
+  dir_vazao  = dirs$vars$discharge$org_dir,
+  col_vazao  = "stream_flow_m3_s", # Insira o nome correto da coluna do seu parquet da ANA
+  dir_chirps = pasta_chirps_organizado,
+  dir_saida  = pasta_resultados
+)
