@@ -119,6 +119,7 @@ baixar_e_organizar <- function(cfg, inventario, run_name, raw_dir, org_dir) {
 selecionar_estacoes <- function(cfg, dados_org) {
   
   message(sprintf("[%s] Selecionando estações por qualidade...", cfg$label))
+  message(sprintf("Total de estações: %d", length(dados_org)))
   
   params <- cfg$select_stations_params
   

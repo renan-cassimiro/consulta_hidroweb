@@ -35,7 +35,6 @@ consolidar_resultados <- function(resumos_list, inventario_list = NULL) {
   # --- 1. Formato longo -------------------------------------------------------
   # Simplesmente empilha os resumos (já têm a coluna `variable`)
   resumo_long <- bind_rows(resumos_list)
-  
   # --- 2. Formato wide --------------------------------------------------------
   # Pivota: cada métrica recebe sufixo com o id da variável
   # ex: slope_sen_discharge, slope_sen_precipitation
@@ -46,7 +45,9 @@ consolidar_resultados <- function(resumos_list, inventario_list = NULL) {
   
   resumo_wide <- resumo_long |>
     select(station_code, variable, all_of(metricas_pivot)) |>
+    mutate(row_id = paste0(variable, station_code))|>
     pivot_wider(
+      id_cols = c(row_id, station_code),
       names_from   = variable,
       values_from  = all_of(metricas_pivot),
       names_glue   = "{.value}_{variable}"
@@ -65,7 +66,8 @@ consolidar_resultados <- function(resumos_list, inventario_list = NULL) {
       st_as_sf()
     
     resumo_spatial <- inventario_todos |>
-      left_join(resumo_wide, by = "station_code")
+      left_join(resumo_wide, by = "station_code") |>
+      filter(!is.na(row_id))
   }
   
   list(
@@ -173,7 +175,8 @@ ler_consolidado <- function(run_name = RUN_NAME,
   if (!fs::file_exists(path_spatial)) stop("Arquivo spatial consolidado ausente: ", path_spatial)
   spatial_consolidado <- sfarrow::st_read_parquet(path_spatial) |> corrigir_colunas_lista()
   
-  path_wide <- fs::path(dirs$consolidated_dir, paste0(run_name, "_disponibilidade_wide.parquet"))
+  
+    path_wide <- fs::path(dirs$consolidated_dir, paste0(run_name, "_disponibilidade_wide.parquet"))
   if (!fs::file_exists(path_wide)) stop("Arquivo wide consolidado ausente: ", path_wide)
   wide_consolidado <- arrow::read_parquet(path_wide) |> corrigir_colunas_lista()
   
@@ -222,18 +225,29 @@ ler_consolidado <- function(run_name = RUN_NAME,
   # -----------------------------------------------------------------------------
   message("\n====== [3/4] Montando objeto estruturado consolidado ======")
   
-  path_long <- fs::path(dirs$consolidated_dir, paste0(run_name, "_disponibilidade_long.parquet"))
-  long_consolidado <- if (fs::file_exists(path_long)) {
-    arrow::read_parquet(path_long)
-  } else {
-    dplyr::bind_rows(purrr::map(resultados_por_variavel, "tabela_resumo"))
-  }
+  # path_long <- fs::path(dirs$consolidated_dir, paste0(run_name, "_disponibilidade_long.parquet"))
+  # long_consolidado <- if (fs::file_exists(path_long)) {
+  #   arrow::read_parquet(path_long)
+  # } else {
+  #   dplyr::bind_rows(purrr::map(resultados_por_variavel, "tabela_resumo"))
+  # }
+  # 
   
-  consolidado <- list(
-    long    = long_consolidado,
-    wide    = wide_consolidado,
-    spatial = spatial_consolidado
-  )
+  resumos_list     <- map(resultados_por_variavel, "tabela_resumo")
+  inventarios_list <- map(resultados_por_variavel, "inventario")
+  
+  consolidado <- consolidar_resultados(
+    resumos_list    = resumos_list,
+    inventario_list = inventarios_list)
+  
+  salvar_consolidado(consolidado, dirs$consolidated_dir, RUN_NAME)
+  # 
+  # 
+  # consolidado <- list(
+  #   long    = long_consolidado,
+  #   wide    = wide_consolidado,
+  #   spatial = spatial_consolidado
+  # )
   
   # -----------------------------------------------------------------------------
   message("\n====== [4/4] Sumário de Verificação Técnica ======")

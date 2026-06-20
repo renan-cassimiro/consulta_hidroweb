@@ -65,7 +65,8 @@ processar_sazonalidade_pipeline <- function(cfg, var_dirs, min_obs = 300) {
   message(sprintf("\n>>> Extraindo Sazonalidade (Jornalismo): %s", cfg$label))
   
   value_col <- cfg$value_col
-  arquivos  <- list.files(var_dirs$org_dir, pattern = "\\.parquet$", full.names = TRUE)
+  variable <- cfg$id
+  arquivos  <- list.files(var_dirs$vars[[variable]]$org_dir, pattern = "\\.parquet$", full.names = TRUE)
   
   if (length(arquivos) == 0) {
     message("Aviso: Nenhum arquivo organizado encontrado para esta variável.")
@@ -99,7 +100,6 @@ processar_sazonalidade_pipeline <- function(cfg, var_dirs, min_obs = 300) {
     metrica$station_code <- estacao
     resultados[[i]] <- metrica
   }
-  
   df_sazonalidade <- bind_rows(resultados)
   return(df_sazonalidade)
 }

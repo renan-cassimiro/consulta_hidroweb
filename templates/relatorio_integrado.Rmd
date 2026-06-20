@@ -1,5 +1,5 @@
 ---
-title: "Diagnóstico Hidroclimatológico Integrado"
+title: "Diagnóstico Hidrológico Integrado"
 subtitle: "Bacia: `r params$run_name` | Variável principal: Vazão (m³/s)"
 author: "Núcleo de Investigação de Dados"
 date: "`r format(Sys.Date(), '%d de %B de %Y')`"
@@ -17,18 +17,14 @@ params:
   resultados_por_variavel: NULL
   # consolidado: saída de consolidar_resultados() — $long, $wide, $spatial
   consolidado:             NULL
-  # df_sazonalidade_discharge: parquet de sazonalidade anual da vazão
+  # df_sazonalidade: parquet de sazonalidade anual da vazão
   df_sazonalidade:         NULL
-  # df_residual: parquet do residual hidrológico consolidado
-  df_residual:             NULL
   # estacoes_snap: sf com snap_cell, posicao_rede, area_contrib_km2 etc.
   estacoes_snap:           NULL
   # area_estudo: sf do polígono da bacia
   area_estudo:             NULL
   # rios: sf de hidrografia (opcional, pode ser NULL)
   rios:                    NULL
-  # ano_inicio_saz: ano mínimo para os gráficos de sazonalidade
-  ano_inicio_saz:          1980
   # run_name: identificador do run
   run_name:                ""
 
@@ -140,12 +136,14 @@ if (!is.null(spatial)) {
 }
 
 df_saz  <- params$df_sazonalidade    # anual por estação
-df_res  <- params$df_residual        # residual CHIRPS × ANA
 snap    <- params$estacoes_snap      # sf com posicao_rede, area_contrib_km2
 area_e  <- params$area_estudo
 rios_sf <- params$rios
 
 run_name <- params$run_name
+
+View(  snap |> dplyr::filter(!is.na(area_contrib_km2)))
+
 
 # --- Limpa prefixo no station_code da sazonalidade (ex: "amacro_15400000" -> "15400000") ---
 if (!is.null(df_saz) && "station_code" %in% names(df_saz)) {
@@ -161,38 +159,114 @@ if (!is.null(snap)) {
     dplyr::select(station_code,
                   dplyr::any_of(c("posicao_rede", "area_contrib_km2",
                                    "ordem_strahler", "dist_exutorio_km"))) |>
-    # Limpa prefixo também no snap, por precaução
-    dplyr::mutate(station_code = sub(paste0("^", run_name, "_"), "", station_code))
+    dplyr::mutate(
+      # Garante tipo character para o join (snap pode trazer factor/numeric)
+      station_code = as.character(station_code),
+      # Limpa prefixo também no snap, por precaução
+      station_code = sub(paste0("^", run_name, "_"), "", station_code)
+    ) |>
+    # Remove duplicidades (estações no mesmo pixel podem gerar linhas repetidas)
+    dplyr::distinct(station_code, .keep_all = TRUE)
 }
 
-# --- Enriquecimento do spatial com posicao_rede ---
+# --- Enriquecimento do spatial com posicao_rede / area_contrib_km2 ---
 if (!is.null(snap_attr) && !is.null(spatial)) {
+
+  # Garante station_code como character em ambos os lados do join
+  spatial <- spatial |>
+    dplyr::mutate(station_code = as.character(station_code))
+
+  # Remove colunas que já existiriam no spatial para evitar sufixos .x/.y
+  cols_a_substituir <- intersect(names(snap_attr), names(spatial))
+  cols_a_substituir <- setdiff(cols_a_substituir, "station_code")
+  if (length(cols_a_substituir) > 0) {
+    spatial <- spatial |> dplyr::select(-dplyr::all_of(cols_a_substituir))
+  }
+
   spatial <- spatial |> dplyr::left_join(snap_attr, by = "station_code")
+
   if ("posicao_rede" %in% names(spatial)) {
     spatial$posicao_rede <- factor(spatial$posicao_rede, levels = ORDEM_REDE)
   }
 }
 
-# --- Enriquecimento do wide com posicao_rede ---
+# --- Enriquecimento do wide com posicao_rede / area_contrib_km2 ---
 if (!is.null(snap_attr) && !is.null(wide)) {
+  wide <- wide |>
+    dplyr::mutate(station_code = as.character(station_code))
+
+  cols_a_substituir_w <- intersect(names(snap_attr), names(wide))
+  cols_a_substituir_w <- setdiff(cols_a_substituir_w, "station_code")
+  if (length(cols_a_substituir_w) > 0) {
+    wide <- wide |> dplyr::select(-dplyr::all_of(cols_a_substituir_w))
+  }
+
   wide <- wide |> dplyr::left_join(snap_attr, by = "station_code")
 }
 
-# --- Enriquecimento do tab_q com posicao_rede ---
+# --- Enriquecimento do tab_q com posicao_rede / area_contrib_km2 ---
 if (!is.null(snap_attr)) {
+  tab_q <- tab_q |>
+    dplyr::mutate(station_code = as.character(station_code))
+
+  cols_a_substituir_q <- intersect(names(snap_attr), names(tab_q))
+  cols_a_substituir_q <- setdiff(cols_a_substituir_q, "station_code")
+  if (length(cols_a_substituir_q) > 0) {
+    tab_q <- tab_q |> dplyr::select(-dplyr::all_of(cols_a_substituir_q))
+  }
+
   tab_q <- tab_q |> dplyr::left_join(snap_attr, by = "station_code")
+}
+
+# --- Diagnóstico granular da fonte (antes de qualquer join) ---
+message(sprintf(
+  "snap bruto: %s | colunas: %s",
+  if (is.null(snap)) "NULL" else paste0(nrow(snap), " linhas"),
+  if (is.null(snap)) "—" else paste(names(sf::st_drop_geometry(snap)), collapse = ", ")
+))
+if (!is.null(snap) && "area_contrib_km2" %in% names(snap)) {
+  message(sprintf(
+    "snap$area_contrib_km2: %d não-NA de %d | exemplos station_code: %s",
+    sum(!is.na(snap$area_contrib_km2)), nrow(snap),
+    paste(head(as.character(snap$station_code), 3), collapse = ", ")
+  ))
+} else if (!is.null(snap)) {
+  message("ATENÇÃO: snap não tem a coluna area_contrib_km2 — ela nunca foi calculada/salva.")
+}
+
+# --- Diagnóstico (visível no console durante o knit) ---
+message(sprintf(
+  "snap_attr: %s | spatial tem area_contrib_km2: %s (%d não-NA) | tab_q tem area_contrib_km2: %s (%d não-NA)",
+  if (is.null(snap_attr)) "NULL" else paste0(nrow(snap_attr), " linhas"),
+  "area_contrib_km2" %in% names(spatial),
+  if ("area_contrib_km2" %in% names(spatial)) sum(!is.na(spatial$area_contrib_km2)) else 0,
+  "area_contrib_km2" %in% names(tab_q),
+  if ("area_contrib_km2" %in% names(tab_q)) sum(!is.na(tab_q$area_contrib_km2)) else 0
+))
+
+if (!is.null(snap_attr)) {
+  message(sprintf(
+    "Exemplos station_code em spatial: %s | em snap_attr: %s",
+    paste(head(as.character(spatial$station_code), 3), collapse = ", "),
+    paste(head(snap_attr$station_code, 3), collapse = ", ")
+  ))
 }
 
 # --- Determina se posicao_rede está disponível e com dados válidos ---
 TEM_POSICAO_REDE <- "posicao_rede" %in% names(tab_q) &&
                     sum(!is.na(tab_q$posicao_rede)) > 0
 
+# --- Determina se área de contribuição está disponível ---
+TEM_AREA_CONTRIB <- "area_contrib_km2" %in% names(tab_q) &&
+                    sum(!is.na(tab_q$area_contrib_km2)) > 0
+
 # --- Filtro de foco: rios principais e tributários principais ---
 # Se posicao_rede não disponível, usa todas as estações como foco
 POSICOES_FOCO <- c("Rio principal", "Tributário principal")
 
 tab_q_foco <- if (TEM_POSICAO_REDE) {
-  dplyr::filter(tab_q, posicao_rede %in% POSICOES_FOCO)
+  # dplyr::filter(tab_q, posicao_rede %in% POSICOES_FOCO)
+  print("teste")
 } else {
   tab_q
 }
@@ -217,7 +291,7 @@ pct_neg_q  <- round(n_neg_q / n_foco_q * 100, 1)
 
 # Visão Geral da Rede de Monitoramento
 
-```{r mapa_rede, fig.width=7, fig.height=5, fig.cap="Estações fluviométricas analisadas. Tamanho proporcional à área de contribuição estimada. Cores indicam posição na rede hidrográfica."}
+```{r mapa_rede, fig.width=8, fig.height=6, fig.cap="Estações fluviométricas analisadas. Tamanho proporcional à área de contribuição estimada. Cores indicam posição na rede hidrográfica."}
 if (!is.null(spatial) && "posicao_rede" %in% names(spatial)) {
 
   cores_rede <- c(
@@ -339,6 +413,59 @@ if (!is.null(tab_q_foco) && nrow(tab_q_foco) > 0) {
 
 ---
 
+# Disponibilidade dos Dados
+
+A robustez de qualquer diagnóstico hidrológico depende da qualidade e continuidade
+das séries históricas. Esta seção apresenta a cobertura temporal das estações que
+passaram pelos critérios de qualidade do pipeline (mínimo de anos válidos, máximo
+de falhas mensais permitido).
+
+```{r disponibilidade_vazao, fig.width=7, fig.height=8, fig.cap="Disponibilidade de dados de vazão por estação. Cada linha representa uma estação; segmentos coloridos indicam anos com dados válidos segundo os critérios de seleção."}
+disp_plot_q <- res_q$dados_selecionados$plot
+if (is.null(disp_plot_q)) disp_plot_q <- res_q$graficos$disponibilidade
+
+if (!is.null(disp_plot_q)) {
+  print(disp_plot_q)
+} else {
+  message("Gráfico de disponibilidade de vazão não encontrado.")
+}
+```
+
+\FloatBarrier
+
+```{r disponibilidade_precip, fig.width=7, fig.height=8, fig.cap="Disponibilidade de dados de precipitação (estações ANA em solo) por estação.", eval=!is.null(res_p)}
+disp_plot_p <- res_p$dados_selecionados$plot
+if (is.null(disp_plot_p)) disp_plot_p <- res_p$graficos$disponibilidade
+
+if (!is.null(disp_plot_p)) {
+  print(disp_plot_p)
+} else {
+  message("Gráfico de disponibilidade de precipitação não encontrado.")
+}
+```
+
+\FloatBarrier
+
+## Critérios de seleção aplicados
+
+```{r criterios_selecao, results='asis'}
+params_sel <- res_q$cfg$select_stations_params
+
+cat(sprintf(
+  "Para a variável de vazão, foram exigidos no mínimo **%d anos** de dados válidos
+dentro da janela **%d–%d**, com tolerância máxima de **%d%%** de falhas mensais
+por ano. Esses critérios resultaram em **%d estações** aprovadas, das quais
+**%d** estão classificadas como Rio principal ou Tributário principal.",
+  params_sel$minYears, params_sel$iniYear, params_sel$finYear,
+  params_sel$maxMissing, n_total_q, n_foco_q
+))
+```
+
+\FloatBarrier
+\newpage
+
+---
+
 # Tendências de Vazão
 
 Análise de `r n_foco_q` estações de foco (Rio principal e Tributário principal).
@@ -347,11 +474,11 @@ Resultado: **`r n_neg_q` com tendência negativa significativa (`r pct_neg_q`%)*
 
 ## Distribuição das tendências por posição na rede
 
-```{r barplot_tendencias, fig.width=7, fig.height=3.5, fig.cap="Distribuição das categorias de tendência de vazão por posição na rede hidrográfica."}
+```{r barplot_tendencias, fig.width=9, fig.height=4.5, fig.cap="Distribuição das categorias de tendência de vazão por posição na rede hidrográfica."}
 if (TEM_POSICAO_REDE) {
 
   contagem_tend <- tab_q |>
-    dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
+    # dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
     dplyr::count(posicao_rede, tendencia) |>
     dplyr::group_by(posicao_rede) |>
     dplyr::mutate(
@@ -375,7 +502,6 @@ if (TEM_POSICAO_REDE) {
 
 } else {
 
-  # Fallback sem agrupamento
   contagem_tend <- tab_q_foco |>
     dplyr::count(tendencia) |>
     dplyr::mutate(
@@ -403,11 +529,11 @@ print(p_barplot)
 
 ## Força e direção das tendências (Slope de Sen)
 
-```{r boxplot_slope, fig.width=7, fig.height=3.5, fig.cap="Distribuição do Slope de Sen (m³/s/ano) por posição na rede. Valores negativos indicam decaimento. Pontos são estações individuais."}
+```{r boxplot_slope, fig.width=9, fig.height=4.5, fig.cap="Distribuição do Slope de Sen (m³/s/ano) por posição na rede. Valores negativos indicam decaimento. Pontos são estações individuais."}
 if (TEM_POSICAO_REDE) {
 
   tab_box <- tab_q |>
-    dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
+    # dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
     dplyr::mutate(
       posicao_rede = factor(posicao_rede, levels = ORDEM_REDE),
       tendencia    = factor(tendencia,    levels = ORDEM_TEND)
@@ -429,7 +555,6 @@ if (TEM_POSICAO_REDE) {
 
 } else {
 
-  # Fallback: barplot horizontal com slope por estação, ordenado
   tab_box <- tab_q_foco |>
     dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND)) |>
     dplyr::arrange(slope_sen)
@@ -453,7 +578,7 @@ print(p_box)
 
 ## Mapa de tendências de vazão
 
-```{r mapa_tendencias_vazao, fig.width=7, fig.height=5, fig.cap="Direção e força da tendência de vazão. Cor = categoria. Tamanho = |tau de Mann-Kendall|."}
+```{r mapa_tendencias_vazao, fig.width=8, fig.height=6, fig.cap="Direção e força da tendência de vazão. Cor = categoria. Tamanho = |tau de Mann-Kendall|."}
 if (!is.null(spatial_foco) && "tendencia_discharge" %in% names(spatial_foco)) {
 
   dados_mapa_tend <- spatial_foco |>
@@ -467,8 +592,7 @@ if (!is.null(spatial_foco) && "tendencia_discharge" %in% names(spatial_foco)) {
 
   if (!is.null(area_e))
     p_mapa_tend <- p_mapa_tend +
-      geom_sf(data = area_e, fill = "#f0f4f8",
-              color = "#adb5bd", linewidth = 0.5)
+      geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
 
   if (!is.null(rios_sf))
     p_mapa_tend <- p_mapa_tend +
@@ -552,6 +676,264 @@ if (nrow(tab_rank) > 0) {
 
 ---
 
+# Anomalias e Eventos Extremos
+
+Cada mês é classificado por z-score em relação à climatologia mensal histórica da
+própria estação. Meses com |z| > 2 são marcados como **anomalia**; |z| > 3 como
+**extremo**. Esta seção apresenta a evolução temporal, a distribuição regional e
+o ranking das estações mais afetadas.
+
+```{r prep_anomalias}
+tem_anomalias <- !is.null(tab_q_foco) && "n_anomalias" %in% names(tab_q_foco)
+
+total_anomalias <- if (tem_anomalias) sum(tab_q_foco$n_anomalias, na.rm = TRUE) else 0
+total_extremos  <- if (tem_anomalias) sum(tab_q_foco$n_extremos,  na.rm = TRUE) else 0
+media_anomalias <- if (tem_anomalias) round(mean(tab_q_foco$n_anomalias, na.rm = TRUE), 1) else 0
+
+# --- Dados mensais empilhados (têm a classificação anomalia/extremo por mês) ---
+# Gerado por analisar_estacao() dentro de res_q$dados_empilhados
+df_mensal_q <- res_q$dados_empilhados
+
+tem_serie_anomalias <- !is.null(df_mensal_q) && nrow(df_mensal_q) > 0 &&
+                       all(c("anomalia", "extremo", "date", "station_code") %in% names(df_mensal_q))
+
+if (tem_serie_anomalias) {
+  # Filtra para estações de foco e período de interesse
+  df_mensal_foco <- df_mensal_q |>
+    dplyr::filter(station_code %in% tab_q_foco$station_code)
+}
+```
+
+Nas `r n_foco_q` estações de foco, foram identificados **`r total_anomalias`
+meses-estação com anomalia severa** e **`r total_extremos` meses-estação com
+valor extremo**, uma média de `r media_anomalias` anomalias por estação ao longo
+do período analisado.
+
+## Evolução temporal de anomalias e extremos
+
+O gráfico abaixo mostra, ano a ano, quantos meses-estação foram classificados
+como anomalia severa ou valor extremo entre as estações de foco. Picos indicam
+anos com estresse hidrológico generalizado na bacia.
+
+```{r serie_temporal_anomalias, fig.width=9, fig.height=4.5, fig.cap="Número de meses-estação classificados como anomalia severa (laranja) e extremo (vermelho) por ano, entre as estações de foco."}
+if (tem_serie_anomalias) {
+
+  df_anom_ano <- df_mensal_foco |>
+    dplyr::mutate(ano = lubridate::year(date)) |>
+    dplyr::group_by(ano) |>
+    dplyr::summarise(
+      n_anomalia_severa = sum(anomalia == "severa", na.rm = TRUE),
+      n_extremo         = sum(extremo, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(
+      cols      = c(n_anomalia_severa, n_extremo),
+      names_to  = "tipo",
+      values_to = "n"
+    ) |>
+    dplyr::mutate(
+      tipo = factor(
+        dplyr::recode(tipo,
+          "n_anomalia_severa" = "Anomalia severa (|z| > 2)",
+          "n_extremo"         = "Extremo (|z| > 3)"
+        ),
+        levels = c("Anomalia severa (|z| > 2)", "Extremo (|z| > 3)")
+      )
+    )
+
+  p_serie_anom <- ggplot(df_anom_ano, aes(x = ano, y = n, color = tipo)) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 2, alpha = 0.85) +
+    scale_color_manual(values = c(
+      "Anomalia severa (|z| > 2)" = "#e76f51",
+      "Extremo (|z| > 3)"        = "#d73027"
+    ), name = NULL) +
+    scale_x_continuous(breaks = scales::breaks_pretty(n = 10)) +
+    labs(
+      x       = "Ano",
+      y       = "Nº de meses-estação",
+      caption = "Contagem agregada entre estações de foco. Um mês-estação = um mês classificado em uma estação."
+    ) +
+    tema_relatorio
+
+  print(p_serie_anom)
+
+} else {
+  message("Dados mensais empilhados não disponíveis para a série temporal de anomalias.")
+}
+```
+
+\FloatBarrier
+
+## Distribuição regional de anomalias
+
+```{r hist_anomalias, fig.width=9, fig.height=4, fig.cap="Distribuição do número de meses com anomalia severa (|z| > 2) por estação. Linha tracejada indica a média regional."}
+if (tem_anomalias && nrow(tab_q_foco) > 0) {
+
+  p_hist_anom <- ggplot(tab_q_foco, aes(x = n_anomalias)) +
+    geom_histogram(binwidth = 2, fill = "#e76f51", alpha = 0.8, color = "white") +
+    geom_vline(xintercept = media_anomalias, linetype = "dashed",
+               color = "#264653", linewidth = 0.8) +
+    annotate("text", x = media_anomalias, y = Inf,
+             label = paste0("Média: ", media_anomalias),
+             vjust = 1.5, hjust = -0.1, size = 3, color = "#264653") +
+    labs(
+      x       = "Nº de meses com anomalia severa (|z| > 2)",
+      y       = "Nº de estações",
+      caption = "Estações de foco. Cada observação é uma estação."
+    ) +
+    tema_relatorio
+
+  print(p_hist_anom)
+}
+```
+
+\FloatBarrier
+
+## Mapa espacial de anomalias
+
+```{r mapa_anomalias, fig.width=8, fig.height=6, fig.cap="Distribuição espacial do número de meses com anomalia severa por estação. Tamanho proporcional ao número de eventos extremos."}
+if (tem_anomalias && !is.null(spatial)) {
+
+  mapa_anom <- spatial |>
+    dplyr::inner_join(
+      tab_q_foco |> dplyr::select(station_code, n_anomalias, n_extremos),
+      by = "station_code"
+    ) |>
+    dplyr::filter(!is.na(n_anomalias))
+
+  if (nrow(mapa_anom) > 0) {
+
+    p_mapa_anom <- ggplot()
+
+    if (!is.null(area_e))
+      p_mapa_anom <- p_mapa_anom +
+        geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
+
+    if (!is.null(rios_sf))
+      p_mapa_anom <- p_mapa_anom +
+        geom_sf(data = rios_sf, color = "#a6bddb", linewidth = 0.3)
+
+    p_mapa_anom <- p_mapa_anom +
+      geom_sf(data = mapa_anom,
+              aes(color = n_anomalias, size = n_extremos + 1),
+              alpha = 0.9) +
+      scale_color_viridis_c(option = "inferno", direction = -1,
+                            name = "Nº anomalias\nseveras") +
+      scale_size_continuous(range = c(2, 7), name = "Nº extremos",
+                            breaks = scales::breaks_pretty(n = 4)) +
+      labs(
+        title   = "Anomalias Severas por Estação",
+        caption = "Cor = nº de meses em anomalia severa. Tamanho = nº de meses extremos."
+      ) +
+      theme_void(base_size = 10) +
+      theme(
+        plot.title      = element_text(face = "bold", size = 11),
+        plot.caption    = element_text(size = 7, color = "gray50"),
+        legend.position = "right"
+      )
+
+    print(p_mapa_anom)
+  }
+}
+```
+
+\FloatBarrier
+\newpage
+
+## Ranking das estações mais afetadas
+
+```{r tabela_ranking_anomalias}
+if (tem_anomalias) {
+
+  tab_rank_anom <- tab_q_foco |>
+    dplyr::arrange(dplyr::desc(n_anomalias)) |>
+    dplyr::slice_head(n = 15) |>
+    dplyr::select(
+      dplyr::any_of(c("station_code", "posicao_rede", "area_contrib_km2",
+                      "n_anomalias", "n_extremos", "tendencia"))
+    ) |>
+    dplyr::rename_with(~ dplyr::case_when(
+      .x == "station_code"    ~ "Estação",
+      .x == "posicao_rede"    ~ "Posição",
+      .x == "area_contrib_km2"~ "Área (km²)",
+      .x == "n_anomalias"     ~ "Anomalias",
+      .x == "n_extremos"      ~ "Extremos",
+      .x == "tendencia"       ~ "Tendência",
+      TRUE                    ~ .x
+    ))
+
+  kable(
+    tab_rank_anom,
+    format    = "latex",
+    booktabs  = TRUE,
+    caption   = "Estações com maior número de meses em anomalia severa, ordenadas decrescentemente.",
+    linesep   = ""
+  ) |>
+    kable_styling(
+      latex_options = c("striped", "hold_position", "scale_down"),
+      font_size     = 8
+    ) |>
+    row_spec(0, bold = TRUE) |>
+    column_spec(4, color = "red", bold = TRUE)
+}
+```
+
+\FloatBarrier
+
+## Anomalias por posição na rede
+
+```{r boxplot_anomalias_rede, fig.width=8, fig.height=4.5, fig.cap="Distribuição do número de anomalias severas por posição na rede hidrográfica."}
+if (tem_anomalias) {
+
+  if (TEM_POSICAO_REDE) {
+
+    tab_anom_rede <- tab_q |>
+      # dplyr::filter(posicao_rede %in% POSICOES_FOCO) |>
+      dplyr::mutate(posicao_rede = factor(posicao_rede, levels = ORDEM_REDE))
+
+    p_anom_rede <- ggplot(tab_anom_rede,
+      aes(x = posicao_rede, y = n_anomalias, fill = posicao_rede)) +
+      geom_boxplot(alpha = 0.6, outlier.shape = 1, width = 0.5, show.legend = FALSE) +
+      geom_jitter(width = 0.12, alpha = 0.5, size = 1.5) +
+      scale_fill_manual(values = c(
+        "Rio principal" = "#264653", "Tributário principal" = "#e76f51"
+      )) +
+      labs(x = NULL, y = "Nº de meses com anomalia severa",
+           caption = "Cada ponto é uma estação de foco.") +
+      tema_relatorio
+
+  } else {
+
+    # Fallback: ranking ordenado sem agrupamento por posição na rede
+    tab_anom_rede <- tab_q_foco |>
+      dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND)) |>
+      dplyr::arrange(dplyr::desc(n_anomalias)) |>
+      dplyr::slice_head(n = 20)
+
+    p_anom_rede <- ggplot(tab_anom_rede,
+      aes(x = reorder(station_code, n_anomalias), y = n_anomalias, fill = tendencia)) +
+      geom_col() +
+      coord_flip() +
+      scale_fill_manual(values = CORES_TEND, name = "Tendência") +
+      labs(x = NULL, y = "Nº de meses com anomalia severa",
+           caption = "Top 20 estações. Agrupamento por posição na rede não disponível.") +
+      tema_relatorio +
+      theme(axis.text.y = element_text(size = 7))
+  }
+
+  print(p_anom_rede)
+
+} else {
+  message("Dados de anomalias não disponíveis.")
+}
+```
+
+\FloatBarrier
+\newpage
+
+---
+
 # Sazonalidade Hidrológica
 
 Esta seção responde: o *ritmo* dos rios está mudando? Analisamos três dimensões:
@@ -564,44 +946,35 @@ df_saz_foco <- NULL
 
 if (!is.null(df_saz) && nrow(df_saz) > 0) {
 
-  # Estações que passaram pela análise (fonte: long consolidado, sem prefixo)
-  codigos_com_analise <- unique(params$consolidado$long$station_code)
+  estacoes_analisadas <- unique(tab_q$station_code)
 
-  df_saz_proc <- df_saz |>
-    # Remove prefixo do pipeline (ex: "amacro_15400000" -> "15400000")
-    dplyr::mutate(
-      station_code = sub(paste0("^", run_name, "_"), "", station_code)
-    ) |>
-    # Filtra apenas estações que têm análise de vazão
-    dplyr::filter(station_code %in% codigos_com_analise) |>
-    # Filtra intervalo de tempo de interesse
-    dplyr::filter(hydro_year >= ANO_INICIO_SAZ)
+  df_saz_prep <- df_saz |>
+    dplyr::filter(hydro_year >= ANO_INICIO_SAZ) |>
+    dplyr::filter(station_code %in% estacoes_analisadas)
 
-  # Junta posicao_rede via snap_attr
   if (!is.null(snap_attr)) {
-    df_saz_proc <- df_saz_proc |>
+    df_saz_prep <- df_saz_prep |>
       dplyr::left_join(
-        snap_attr |>
-          dplyr::select(station_code,
-                        dplyr::any_of(c("posicao_rede", "area_contrib_km2"))),
+        snap_attr |> dplyr::select(station_code,
+                                    dplyr::any_of(c("posicao_rede", "area_contrib_km2"))),
         by = "station_code"
       )
   }
 
-  # Filtra para estações de foco se posicao_rede disponível
-  if (TEM_POSICAO_REDE && "posicao_rede" %in% names(df_saz_proc)) {
-    df_saz_foco <- df_saz_proc |>
-      dplyr::filter(posicao_rede %in% POSICOES_FOCO)
+  if (TEM_POSICAO_REDE && "posicao_rede" %in% names(df_saz_prep)) {
+    df_saz_foco <- df_saz_prep 
+    # |>
+      # dplyr::filter(posicao_rede %in% POSICOES_FOCO)
   } else {
-    df_saz_foco <- df_saz_proc
+    df_saz_foco <- df_saz_prep
   }
 
   message(sprintf(
     "Sazonalidade: %d linhas | %d estações | %d a %d",
     nrow(df_saz_foco),
     dplyr::n_distinct(df_saz_foco$station_code),
-    min(df_saz_foco$hydro_year, na.rm = TRUE),
-    max(df_saz_foco$hydro_year, na.rm = TRUE)
+    suppressWarnings(min(df_saz_foco$hydro_year, na.rm = TRUE)),
+    suppressWarnings(max(df_saz_foco$hydro_year, na.rm = TRUE))
   ))
 }
 ```
@@ -612,7 +985,7 @@ O gráfico abaixo mostra, ano a ano, como a duração máxima dos períodos de s
 estrita evoluiu nas estações de foco. A linha representa a mediana e a faixa o
 intervalo interquartil entre estações.
 
-```{r ridgeline_seca, fig.width=7, fig.height=4, fig.cap="Evolução anual da duração máxima da seca estrita (dias consecutivos abaixo do Q90 histórico). Linha = mediana entre estações de foco. Faixa = IQR. Tendência LOESS em vermelho."}
+```{r evolucao_seca, fig.width=9, fig.height=4.5, fig.cap="Evolução anual da duração máxima da seca estrita (dias consecutivos abaixo do Q90 histórico). Linha = mediana entre estações de foco. Faixa = IQR. Tendência LOESS em vermelho."}
 if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco) &&
     nrow(df_saz_foco) > 0) {
 
@@ -648,16 +1021,90 @@ if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco) &&
 
 \FloatBarrier
 
+## Mapa espacial da tendência de seca
+
+```{r mapa_seca, fig.width=8, fig.height=6, fig.cap="Tendência linear da duração da seca Q90 por estação. Vermelho = secas cada vez mais longas. Azul = secas encurtando. Apenas estações com ≥ 10 anos de dados."}
+if (!is.null(df_saz_foco) && "duracao_seca_q90" %in% names(df_saz_foco) &&
+    nrow(df_saz_foco) > 0 && !is.null(spatial)) {
+
+  tend_seca_est <- df_saz_foco |>
+    dplyr::filter(!is.na(duracao_seca_q90)) |>
+    dplyr::group_by(station_code) |>
+    dplyr::summarise(
+      slope_seca = tryCatch(
+        coef(lm(duracao_seca_q90 ~ hydro_year))[2],
+        error = function(e) NA_real_
+      ),
+      n_anos = dplyr::n(),
+      .groups = "drop"
+    ) |>
+    dplyr::filter(n_anos >= 10, !is.na(slope_seca)) |>
+    dplyr::mutate(
+      dir_seca = dplyr::case_when(
+        slope_seca >  0.5 ~ "Seca alongando",
+        slope_seca < -0.5 ~ "Seca encurtando",
+        TRUE              ~ "Estável"
+      )
+    )
+
+  mapa_seca <- spatial |>
+    dplyr::inner_join(tend_seca_est, by = "station_code") |>
+    dplyr::filter(!is.na(slope_seca))
+
+  if (nrow(mapa_seca) > 0) {
+    cores_seca <- c(
+      "Seca alongando"  = "#d73027",
+      "Estável"         = "#969696",
+      "Seca encurtando" = "#4575b4"
+    )
+
+    p_mapa_seca <- ggplot()
+
+    if (!is.null(area_e))
+      p_mapa_seca <- p_mapa_seca +
+        geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
+
+    if (!is.null(rios_sf))
+      p_mapa_seca <- p_mapa_seca +
+        geom_sf(data = rios_sf, color = "#a6bddb", linewidth = 0.3)
+
+    p_mapa_seca <- p_mapa_seca +
+      geom_sf(data = mapa_seca,
+              aes(color = dir_seca, size = abs(slope_seca)),
+              alpha = 0.9) +
+      scale_color_manual(values = cores_seca, name = "Direção") +
+      scale_size_continuous(name = "|Velocidade|\n(dias/ano)", range = c(1.5, 6)) +
+      guides(
+        color = guide_legend(override.aes = list(size = 4)),
+        size  = guide_legend()
+      ) +
+      labs(
+        title   = "Tendência da Duração da Seca Q90",
+        caption = "Tendência linear de dias consecutivos abaixo do limiar Q90. Apenas estações com ≥ 10 anos."
+      ) +
+      theme_void(base_size = 10) +
+      theme(
+        plot.title      = element_text(face = "bold", size = 11),
+        plot.caption    = element_text(size = 7, color = "gray50"),
+        legend.position = "right"
+      )
+
+    print(p_mapa_seca)
+  }
+}
+```
+
+\FloatBarrier
+
 ## Mudança no Timing do Rio (Centro de Massa)
 
 O centro de massa indica o dia do ano em que 50% do volume anual passou pela
 estação. Uma tendência significativa de avanço (valores decrescentes) ou recuo
 (crescentes) revela alterações no ritmo hídrico da bacia.
 
-```{r mapa_centro_massa, fig.width=7, fig.height=5, fig.cap="Tendência linear do centro de massa por estação. Cores indicam a direção da mudança: azul = pico chegando mais cedo, vermelho = chegando mais tarde. Estações sem tendência significativa em cinza."}
+```{r mapa_centro_massa, fig.width=8, fig.height=6, fig.cap="Tendência linear do centro de massa por estação. Cores indicam a direção da mudança: azul = pico chegando mais cedo, vermelho = chegando mais tarde. Estações sem tendência significativa em cinza."}
 if (!is.null(df_saz_foco) && !is.null(spatial)) {
 
-  # Calcula a tendência linear do CM por estação
   tend_cm <- df_saz_foco |>
     dplyr::filter(!is.na(centro_massa)) |>
     dplyr::group_by(station_code) |>
@@ -693,8 +1140,7 @@ if (!is.null(df_saz_foco) && !is.null(spatial)) {
 
     if (!is.null(area_e))
       p_cm <- p_cm +
-        geom_sf(data = area_e, fill = "#f0f4f8",
-                color = "#adb5bd", linewidth = 0.5)
+        geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
 
     if (!is.null(rios_sf))
       p_cm <- p_cm +
@@ -736,7 +1182,7 @@ if (!is.null(df_saz_foco) && !is.null(spatial)) {
 Razão entre a variação máx–mín anual e a média do ano. Valores crescentes indicam
 que a diferença entre a cheia e a seca está se intensificando — o rio oscila mais.
 
-```{r amplitude_temporal, fig.width=7, fig.height=4, fig.cap="Evolução da amplitude relativa mediana por posição na rede (linhas) com intervalo interquartil (faixa). Tendência suavizada por LOESS."}
+```{r amplitude_temporal, fig.width=9, fig.height=4.5, fig.cap="Evolução da amplitude relativa mediana por posição na rede (linhas) com intervalo interquartil (faixa). Tendência suavizada por LOESS."}
 if (!is.null(df_saz_foco) && "amplitude_rel" %in% names(df_saz_foco) &&
     nrow(df_saz_foco) > 0) {
 
@@ -774,7 +1220,6 @@ if (!is.null(df_saz_foco) && "amplitude_rel" %in% names(df_saz_foco) &&
 
   } else {
 
-    # Fallback: série agregada de todas as estações sem agrupamento
     df_amp <- df_saz_foco |>
       dplyr::filter(!is.na(amplitude_rel)) |>
       dplyr::group_by(hydro_year) |>
@@ -804,14 +1249,62 @@ if (!is.null(df_saz_foco) && "amplitude_rel" %in% names(df_saz_foco) &&
 ```
 
 \FloatBarrier
+
+## Mapa espacial da amplitude sazonal
+
+```{r mapa_amplitude, fig.width=8, fig.height=6, fig.cap="Amplitude relativa média por estação ao longo do período analisado. Valores maiores indicam maior contraste entre cheia e seca."}
+if (!is.null(df_saz_foco) && "amplitude_rel" %in% names(df_saz_foco) &&
+    nrow(df_saz_foco) > 0 && !is.null(spatial)) {
+
+  amp_media_est <- df_saz_foco |>
+    dplyr::filter(!is.na(amplitude_rel)) |>
+    dplyr::group_by(station_code) |>
+    dplyr::summarise(amp_media = mean(amplitude_rel, na.rm = TRUE), .groups = "drop")
+
+  mapa_amp <- spatial |>
+    dplyr::inner_join(amp_media_est, by = "station_code") |>
+    dplyr::filter(!is.na(amp_media))
+
+  if (nrow(mapa_amp) > 0) {
+
+    p_mapa_amp <- ggplot()
+
+    if (!is.null(area_e))
+      p_mapa_amp <- p_mapa_amp +
+        geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
+
+    if (!is.null(rios_sf))
+      p_mapa_amp <- p_mapa_amp +
+        geom_sf(data = rios_sf, color = "#a6bddb", linewidth = 0.3)
+
+    p_mapa_amp <- p_mapa_amp +
+      geom_sf(data = mapa_amp, aes(color = amp_media, size = amp_media), alpha = 0.9) +
+      scale_color_viridis_c(option = "plasma", direction = -1, name = "Amplitude\nrelativa média") +
+      scale_size_continuous(range = c(2, 7), guide = "none") +
+      labs(
+        title   = "Amplitude Sazonal Média",
+        caption = "Média do período por estação. Cores e tamanho mais intensos = maior contraste cheia/seca."
+      ) +
+      theme_void(base_size = 10) +
+      theme(
+        plot.title      = element_text(face = "bold", size = 11),
+        plot.caption    = element_text(size = 7, color = "gray50"),
+        legend.position = "right"
+      )
+
+    print(p_mapa_amp)
+  }
+}
+```
+
+\FloatBarrier
 \newpage
 
 ---
 
-# Contexto Climático — Precipitação
+# Contexto Climático — Precipitação (Estações ANA)
 
 ```{r prep_precipitacao}
-# Determina se há análise de precipitação disponível
 tem_precip <- !is.null(tab_p) && nrow(tab_p) > 0
 
 n_neg_p <- if (tem_precip) sum(tab_p$tendencia == "Negativa", na.rm = TRUE) else 0
@@ -821,15 +1314,12 @@ pct_neg_p <- if (tem_precip && n_est_p > 0) round(n_neg_p / n_est_p * 100, 1) el
 
 `r if (!tem_precip) "\\textit{Dados de precipitação não disponíveis para este run.}"`
 
-```{r bloco_precipitacao, eval=tem_precip}
-```
-
 ## Tendências de precipitação
 
 Das `r n_est_p` estações pluviométricas analisadas, `r n_neg_p`
 (`r pct_neg_p`%) apresentam tendência de queda significativa.
 
-```{r mapa_precip, fig.width=7, fig.height=5, fig.cap="Tendências de precipitação. Cor = categoria. Tamanho = |tau|.", eval=tem_precip}
+```{r mapa_precip, fig.width=8, fig.height=6, fig.cap="Tendências de precipitação medida em solo. Cor = categoria. Tamanho = |tau|.", eval=tem_precip}
 if (!is.null(spatial) && "tendencia_precipitation" %in% names(spatial)) {
 
   dados_p_map <- spatial |>
@@ -843,8 +1333,7 @@ if (!is.null(spatial) && "tendencia_precipitation" %in% names(spatial)) {
 
   if (!is.null(area_e))
     p_mapa_p <- p_mapa_p +
-      geom_sf(data = area_e, fill = "#f0f4f8",
-              color = "#adb5bd", linewidth = 0.5)
+      geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
 
   if (!is.null(rios_sf))
     p_mapa_p <- p_mapa_p +
@@ -876,13 +1365,9 @@ if (!is.null(spatial) && "tendencia_precipitation" %in% names(spatial)) {
 
 \FloatBarrier
 
-## Comparativo: tendências de vazão versus precipitação
+## Comparativo regional: vazão versus precipitação
 
-```{r scatter_q_vs_p, fig.width=7, fig.height=4, fig.cap="Comparativo regional entre as distribuições do Slope de Sen de vazão e precipitação. Como as redes fluviométrica e pluviométrica cobrem locais distintos, a comparação é feita pela distribuição regional agregada."}
-
-# As redes fluviométrica e pluviométrica da ANA têm códigos distintos —
-# não há estações com dados de ambas as variáveis simultaneamente.
-# Comparamos as distribuições regionais dos slopes.
+```{r scatter_q_vs_p, fig.width=9, fig.height=4.5, fig.cap="Comparativo regional entre as distribuições do Slope de Sen de vazão e precipitação. Como as redes fluviométrica e pluviométrica cobrem locais distintos, a comparação é feita pela distribuição regional agregada."}
 
 tem_ambos <- !is.null(tab_q_foco) && nrow(tab_q_foco) > 0 &&
              !is.null(tab_p)       && nrow(tab_p) > 0
@@ -899,7 +1384,6 @@ if (tem_ambos) {
   ) |>
     dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND))
 
-  # Normaliza os slopes para comparação numa escala comum (z-score por variável)
   df_dist <- df_dist |>
     dplyr::group_by(variavel) |>
     dplyr::mutate(
@@ -936,173 +1420,114 @@ if (tem_ambos) {
 
 ---
 
-# O Descompasso Clima × Rio (Análise CHIRPS)
+# Área de Contribuição das Bacias
 
-Esta seção cruza a precipitação espacializada por bacia (CHIRPS) com a vazão
-medida em solo (ANA) para isolar o componente de decaimento *não explicado* pelo
-clima. Um **residual negativo persistente** indica que a bacia perdeu capacidade
-de converter chuva em escoamento — sinal de degradação do solo, desmatamento ou
-impermeabilização.
+A área de contribuição (drenagem acumulada até o ponto da estação) é um proxy do
+porte hidrológico do rio naquele trecho. Estações com bacias maiores tendem a
+integrar sinais climáticos de áreas mais extensas, enquanto bacias pequenas
+respondem de forma mais rápida e localizada a eventos de chuva ou seca.
 
-```{r prep_residual}
-tem_residual <- !is.null(df_res) && nrow(df_res) > 0
-
-if (tem_residual && !is.null(snap)) {
-  snap_tbl3 <- snap |>
-    sf::st_drop_geometry() |>
-    dplyr::select(station_code,
-                  dplyr::any_of(c("posicao_rede", "area_contrib_km2")))
-
-  df_res <- df_res |>
-    dplyr::left_join(snap_tbl3, by = "station_code")
-
-  if ("posicao_rede" %in% names(df_res)) {
-    df_res_foco <- dplyr::filter(df_res, posicao_rede %in% POSICOES_FOCO)
-  } else {
-    df_res_foco <- df_res
-  }
+```{r prep_area_contrib}
+df_area <- if (TEM_AREA_CONTRIB) {
+  tab_q_foco |>
+    dplyr::filter(!is.na(area_contrib_km2)) |>
+    dplyr::mutate(tendencia = factor(tendencia, levels = ORDEM_TEND))
 } else {
-  df_res_foco <- df_res
+  NULL
 }
 ```
 
-`r if (!tem_residual) "\\textit{Análise CHIRPS não disponível para este run — rode o módulo residual\\_hidrologico.R e passe df\\_residual nos params.}"`
+`r if (!TEM_AREA_CONTRIB) "\\textit{Área de contribuição não disponível para este run — etapa de delimitação de bacias (DEM) não foi executada ou não propagou area\\_contrib\\_km2.}"`
 
-## Elasticidade climatológica por estação
+## Distribuição das áreas de contribuição
 
-```{r scatter_elasticidade, fig.width=7, fig.height=5, fig.cap="Variação percentual recente da chuva (eixo X) vs. variação da vazão (eixo Y) nos últimos 5 anos em relação à média histórica. Pontos abaixo da diagonal secaram proporcionalmente mais do que a chuva justificaria. Tamanho = elasticidade.", eval=tem_residual}
+```{r hist_area_contrib, fig.width=9, fig.height=4.5, fig.cap="Distribuição das áreas de contribuição das estações de foco (escala logarítmica).", eval=TEM_AREA_CONTRIB}
+if (!is.null(df_area) && nrow(df_area) > 0) {
 
-df_resumo_el <- df_res_foco |>
-  dplyr::group_by(station_code) |>
-  dplyr::summarise(
-    elasticidade   = dplyr::first(elasticidade_estacao),
-    media_chuva    = mean(chuva_anual_mm,  na.rm = TRUE),
-    media_vazao    = mean(vazao_media_m3s, na.rm = TRUE),
-    chuva_recente  = mean(utils::tail(chuva_anual_mm,  5), na.rm = TRUE),
-    vazao_recente  = mean(utils::tail(vazao_media_m3s, 5), na.rm = TRUE),
-    .groups        = "drop"
-  ) |>
-  dplyr::mutate(
-    queda_chuva_pct = (chuva_recente  - media_chuva) / media_chuva  * 100,
-    queda_vazao_pct = (vazao_recente  - media_vazao) / media_vazao  * 100
-  ) |>
-  dplyr::filter(!is.na(elasticidade))
+  p_hist_area <- ggplot(df_area, aes(x = area_contrib_km2)) +
+    geom_histogram(bins = 15, fill = "#264653", alpha = 0.85, color = "white") +
+    scale_x_log10(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+    labs(
+      x       = "Área de contribuição (km², escala log)",
+      y       = "Nº de estações",
+      caption = "Estações de foco. Escala logarítmica devido à ampla variação de porte das bacias."
+    ) +
+    tema_relatorio
 
-if (nrow(df_resumo_el) > 0) {
-  p_scatter_el <- ggplot(df_resumo_el,
-    aes(x = queda_chuva_pct, y = queda_vazao_pct)) +
+  print(p_hist_area)
+}
+```
+
+\FloatBarrier
+
+## Área de contribuição versus força da tendência
+
+```{r scatter_area_tendencia, fig.width=9, fig.height=5, fig.cap="Relação entre área de contribuição e a magnitude da tendência de vazão (Slope de Sen). Cor indica significância estatística.", eval=TEM_AREA_CONTRIB}
+if (!is.null(df_area) && nrow(df_area) > 0) {
+
+  p_scatter_area <- ggplot(df_area,
+    aes(x = area_contrib_km2, y = slope_sen, color = tendencia)) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "gray60") +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "gray60") +
-    geom_abline(slope = 1, intercept = 0,
-                color = "gray70", linetype = "dotted", linewidth = 0.8) +
-    geom_point(aes(size = elasticidade, color = elasticidade), alpha = 0.8) +
-    scale_color_viridis_c(option = "magma", direction = -1,
-                          name = "Elasticidade") +
-    scale_size_continuous(range = c(2.5, 8), guide = "none") +
-    geom_text_repel(aes(label = station_code),
-                    size = 2.5, color = "gray30", max.overlaps = 15) +
+    geom_point(size = 3, alpha = 0.85) +
+    geom_text_repel(aes(label = station_code), size = 2.4,
+                    color = "gray30", max.overlaps = 12) +
+    scale_x_log10(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+    scale_color_manual(values = CORES_TEND, name = "Tendência") +
     labs(
-      x       = "Variação da chuva média recente (%)",
-      y       = "Variação da vazão média recente (%)",
-      caption = "Linha pontilhada = proporção 1:1. Pontos abaixo da diagonal = rios que secaram mais que a chuva justifica.\nEstações de foco. Últimos 5 anos vs. média histórica."
+      x       = "Área de contribuição (km², escala log)",
+      y       = "Slope de Sen (m³/s/ano)",
+      caption = "Bacias maiores integram sinais climáticos de área mais extensa."
     ) +
     tema_relatorio
 
-  print(p_scatter_el)
+  print(p_scatter_area)
 }
 ```
 
 \FloatBarrier
 
-## Residual hidrológico temporal
+## Mapa de faixas de área de contribuição
 
-```{r residual_temporal, fig.width=7, fig.height=5, fig.cap="Residual percentual médio anual (vazão real vs. esperada pela chuva) para as estações de foco. Barras vermelhas = rio correu menos que o clima justificaria. Tendência LOESS em preto.", eval=tem_residual}
+```{r mapa_faixas_area, fig.width=8, fig.height=6, fig.cap="Distribuição espacial das estações por faixa de área de contribuição.", eval=TEM_AREA_CONTRIB}
+if (!is.null(df_area) && nrow(df_area) > 0 && !is.null(spatial)) {
+  faixas_levels <- c("< 1.000 km²", "1.000 – 10.000 km²",
+                     "10.000 – 100.000 km²", "> 100.000 km²")
 
-if (nrow(df_res_foco) > 0 && "residual_pct" %in% names(df_res_foco)) {
-
-  df_res_agregado <- df_res_foco |>
-    dplyr::group_by(ano) |>
-    dplyr::summarise(
-      residual_med  = median(residual_pct, na.rm = TRUE),
-      residual_q25  = quantile(residual_pct, 0.25, na.rm = TRUE),
-      residual_q75  = quantile(residual_pct, 0.75, na.rm = TRUE),
-      n_est         = dplyr::n(),
-      .groups       = "drop"
+  mapa_faixas <- spatial |>
+    # dplyr::inner_join(
+    #   df_area |> dplyr::select(station_code, area_contrib_km2),
+    #   by = "station_code"
+    # ) |>
+    dplyr::filter(!is.na(area_contrib_km2)) |>
+    dplyr::mutate(
+      faixa_area = dplyr::case_when(
+        area_contrib_km2 < 1000    ~ "< 1.000 km²",
+        area_contrib_km2 < 10000   ~ "1.000 – 10.000 km²",
+        area_contrib_km2 < 100000  ~ "10.000 – 100.000 km²",
+        TRUE                       ~ "> 100.000 km²"
+      ),
+      faixa_area = factor(faixa_area, levels = faixas_levels)
     )
 
-  p_res_temp <- ggplot(df_res_agregado, aes(x = ano, y = residual_med)) +
-    geom_ribbon(aes(ymin = residual_q25, ymax = residual_q75),
-                fill = "gray80", alpha = 0.5) +
-    geom_col(aes(fill = residual_med < 0), alpha = 0.75) +
-    geom_smooth(method = "loess", color = "#333333",
-                se = FALSE, linewidth = 0.8, linetype = "dashed") +
-    geom_hline(yintercept = 0, color = "gray40", linewidth = 0.4) +
-    scale_fill_manual(
-      values = c("TRUE" = "#d73027", "FALSE" = "#4575b4"),
-      guide  = "none"
-    ) +
-    scale_y_continuous(labels = function(x) paste0(x, "%")) +
-    labs(
-      x       = NULL,
-      y       = "Residual mediano (%)",
-      caption = "Mediana das estações de foco. Faixa cinza = IQR. Tracejado = tendência LOESS.\nNegativo = rios correndo abaixo do esperado pela chuva."
-    ) +
-    tema_relatorio
+  if (nrow(mapa_faixas) > 0) {
 
-  print(p_res_temp)
-}
-```
-
-\FloatBarrier
-
-## Mapa do déficit hidrológico médio
-
-```{r mapa_residual, fig.width=7, fig.height=5, fig.cap="Residual hidrológico médio por estação (média de todo o período). Vermelho indica déficit estrutural — o rio perde mais água do que o clima explica.", eval=tem_residual}
-
-if (!is.null(spatial) && nrow(df_res_foco) > 0) {
-
-  df_res_media <- df_res_foco |>
-    dplyr::group_by(station_code) |>
-    dplyr::summarise(
-      residual_medio_pct = mean(residual_pct, na.rm = TRUE),
-      elasticidade       = dplyr::first(elasticidade_estacao),
-      .groups            = "drop"
-    )
-
-  mapa_res <- spatial |>
-    dplyr::inner_join(df_res_media, by = "station_code") |>
-    dplyr::filter(!is.na(residual_medio_pct))
-
-  if (nrow(mapa_res) > 0) {
-    lim_abs <- max(abs(mapa_res$residual_medio_pct), na.rm = TRUE)
-
-    p_mapa_res <- ggplot()
+    p_mapa_faixas <- ggplot()
 
     if (!is.null(area_e))
-      p_mapa_res <- p_mapa_res +
-        geom_sf(data = area_e, fill = "#f0f4f8",
-                color = "#adb5bd", linewidth = 0.5)
+      p_mapa_faixas <- p_mapa_faixas +
+        geom_sf(data = area_e, fill = "#f0f4f8", color = "#adb5bd", linewidth = 0.5)
 
     if (!is.null(rios_sf))
-      p_mapa_res <- p_mapa_res +
+      p_mapa_faixas <- p_mapa_faixas +
         geom_sf(data = rios_sf, color = "#a6bddb", linewidth = 0.3)
 
-    p_mapa_res <- p_mapa_res +
-      geom_sf(data  = mapa_res,
-              aes(color = residual_medio_pct, size = abs(residual_medio_pct)),
-              alpha = 0.9) +
-      scale_color_gradient2(
-        low      = "#d73027",
-        mid      = "#ffffbf",
-        high     = "#4575b4",
-        midpoint = 0,
-        limits   = c(-lim_abs, lim_abs),
-        name     = "Residual\nmédio (%)"
-      ) +
-      scale_size_continuous(range = c(1.5, 6), guide = "none") +
+    p_mapa_faixas <- p_mapa_faixas +
+      geom_sf(data = mapa_faixas, aes(color = faixa_area, size = faixa_area), alpha = 0.9) +
+      scale_color_viridis_d(option = "viridis", direction = -1, name = "Área de\ncontribuição") +
+      scale_size_manual(values = c(2, 3.5, 5, 7), guide = "none") +
       labs(
-        title   = "Déficit Hidrológico Estrutural",
-        caption = "Média do residual percentual (vazão real − esperada). Vermelho = déficit sistemático."
+        title   = "Porte Hidrológico das Estações",
+        caption = "Faixas de área de contribuição. Pontos maiores = bacias maiores."
       ) +
       theme_void(base_size = 10) +
       theme(
@@ -1111,8 +1536,46 @@ if (!is.null(spatial) && nrow(df_res_foco) > 0) {
         legend.position = "right"
       )
 
-    print(p_mapa_res)
+    print(p_mapa_faixas)
   }
+}
+```
+
+\FloatBarrier
+
+## Estações por faixa de área de contribuição
+
+```{r tabela_faixas_area, eval=TEM_AREA_CONTRIB}
+if (!is.null(df_area) && nrow(df_area) > 0) {
+
+  df_faixas <- df_area |>
+    dplyr::mutate(
+      faixa_area = dplyr::case_when(
+        area_contrib_km2 < 1000    ~ "< 1.000 km²",
+        area_contrib_km2 < 10000   ~ "1.000 – 10.000 km²",
+        area_contrib_km2 < 100000  ~ "10.000 – 100.000 km²",
+        TRUE                       ~ "> 100.000 km²"
+      ),
+      faixa_area = factor(faixa_area, levels = c(
+        "< 1.000 km²", "1.000 – 10.000 km²",
+        "10.000 – 100.000 km²", "> 100.000 km²"
+      ))
+    ) |>
+    dplyr::count(faixa_area, tendencia) |>
+    tidyr::pivot_wider(names_from = tendencia, values_from = n, values_fill = 0)
+
+  kable(
+    df_faixas,
+    format   = "latex",
+    booktabs = TRUE,
+    caption  = "Distribuição de estações por faixa de área de contribuição e categoria de tendência.",
+    align    = c("l", rep("r", ncol(df_faixas) - 1))
+  ) |>
+    kable_styling(
+      latex_options = c("striped", "hold_position"),
+      font_size     = 9
+    ) |>
+    row_spec(0, bold = TRUE)
 }
 ```
 
@@ -1125,11 +1588,11 @@ if (!is.null(spatial) && nrow(df_res_foco) > 0) {
 
 ## Matriz consolidada de indicadores
 
-Tabela unificada com os principais indicadores de todas as fases por estação.
-Estações com tendência de vazão negativa estão destacadas em vermelho; positiva em azul.
+Tabela unificada com os principais indicadores de vazão, sazonalidade e
+precipitação por estação. Estações com tendência de vazão negativa estão
+destacadas em vermelho; positiva em azul.
 
 ```{r matriz_consolidada}
-# Monta a tabela com tudo que estiver disponível
 tbl_sint <- tab_q_foco |>
   dplyr::select(
     station_code,
@@ -1138,7 +1601,6 @@ tbl_sint <- tab_q_foco |>
                     "ponto_mudanca", "n_anomalias", "n_extremos"))
   )
 
-# Junta sazonalidade resumida
 if (!is.null(df_saz_foco) && nrow(df_saz_foco) > 0) {
   saz_resumo <- df_saz_foco |>
     dplyr::group_by(station_code) |>
@@ -1151,7 +1613,6 @@ if (!is.null(df_saz_foco) && nrow(df_saz_foco) > 0) {
   tbl_sint <- dplyr::left_join(tbl_sint, saz_resumo, by = "station_code")
 }
 
-# Junta precipitação
 if (!is.null(tab_p)) {
   p_resumo <- tab_p |>
     dplyr::select(station_code,
@@ -1160,15 +1621,6 @@ if (!is.null(tab_p)) {
   tbl_sint <- dplyr::left_join(tbl_sint, p_resumo, by = "station_code")
 }
 
-# Junta residual/elasticidade
-if (tem_residual && exists("df_resumo_el") && nrow(df_resumo_el) > 0) {
-  el_resumo <- df_resumo_el |>
-    dplyr::select(station_code, elasticidade,
-                  queda_chuva_pct, queda_vazao_pct)
-  tbl_sint <- dplyr::left_join(tbl_sint, el_resumo, by = "station_code")
-}
-
-# Renomeia para o PDF
 tbl_sint_print <- tbl_sint |>
   dplyr::arrange(dplyr::desc(dplyr::coalesce(area_contrib_km2, 0))) |>
   dplyr::rename_with(~ dplyr::case_when(
@@ -1186,9 +1638,6 @@ tbl_sint_print <- tbl_sint |>
     .x == "cm_med"          ~ "CM(dia)",
     .x == "tend_precip"     ~ "Tend.P",
     .x == "slope_precip"    ~ "SlopeP",
-    .x == "elasticidade"    ~ "Elast.",
-    .x == "queda_chuva_pct" ~ "ΔChuva%",
-    .x == "queda_vazao_pct" ~ "ΔVazão%",
     TRUE                    ~ .x
   ))
 
@@ -1243,14 +1692,12 @@ n_seca_piorando <- if (!is.null(df_saz_foco) && nrow(df_saz_foco) > 0 &&
     nrow()
 } else { NA }
 
-n_deficit <- if (tem_residual && exists("df_resumo_el") && nrow(df_resumo_el) > 0) {
-  sum(df_resumo_el$queda_vazao_pct < df_resumo_el$queda_chuva_pct, na.rm = TRUE)
-} else { NA }
-
 cat(sprintf(
   "Das **%d** estações de foco analisadas, **%d** (%s%%) apresentam tendência
-estatisticamente significativa de queda na vazão (Mann-Kendall, p < 0,05).",
-  n_foco_q, n_neg_q, pct_neg_q
+estatisticamente significativa de queda na vazão (Mann-Kendall, p < 0,05).
+Ao todo, foram registrados **%d** meses-estação com anomalia severa e
+**%d** com valor extremo.",
+  n_foco_q, n_neg_q, pct_neg_q, total_anomalias, total_extremos
 ))
 
 if (!is.na(n_seca_piorando)) {
@@ -1262,17 +1709,17 @@ estão se tornando mais longas e ininterruptas ao longo do período monitorado."
   ))
 }
 
-if (!is.na(n_deficit)) {
+if (tem_precip) {
   cat(sprintf(
-    " A análise integrada CHIRPS×ANA revela que **%d** estações perderam mais
-vazão do que a redução de chuva justificaria, apontando para um componente
-estrutural de degradação da capacidade de conversão chuva-escoamento da bacia.",
-    n_deficit
+    " No mesmo período, das %d estações pluviométricas em solo, %d (%s%%)
+apresentam tendência de queda significativa na precipitação — um contexto
+climático que ajuda a situar o comportamento observado na vazão.",
+    n_est_p, n_neg_p, pct_neg_p
   ))
 }
 ```
 
 ---
 
-*Relatório gerado automaticamente pelo pipeline hidroclimatológico.*
+*Relatório gerado automaticamente pelo pipeline hidrológico.*
 *Run:* `r run_name` *| Data:* `r format(Sys.Date(), '%d/%m/%Y')`

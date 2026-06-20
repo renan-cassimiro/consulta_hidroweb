@@ -24,6 +24,7 @@ for (var_id in names(VARIABLE_CONFIGS)) {
   cfg <- VARIABLE_CONFIGS[[var_id]]
   
   message(sprintf("\n====== %s ======", toupper(var_id)))
+  
   # Fase 1: Ingestão
   inv <- obter_inventario(cfg, area_estudo)
   
@@ -37,6 +38,7 @@ for (var_id in names(VARIABLE_CONFIGS)) {
   )
   
   df_limpo <- selecionar_estacoes(cfg, df_bruto)
+    
   
   # Salvar parquets intermediários
   # arrow::write_parquet(df_limpo, paste0(dirs$data, "/", var_id, "_limpo.parquet"))
@@ -52,7 +54,6 @@ for (var_id in names(VARIABLE_CONFIGS)) {
 
   # 1. Executa o processamento matemático por estação/ano
   df_sazonal <- processar_sazonalidade_pipeline(cfg, var_dirs)
-  
   
   
   if (!is.null(df_sazonal) && nrow(df_sazonal) > 0) {

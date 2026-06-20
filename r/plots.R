@@ -208,6 +208,7 @@ gerar_graficos <- function(tabela_resumo,
   # ---------------------------------------------------------------------------
   # G5. Mapa temático: tamanho = |τ|, cor = tendência, camadas geo opcionais
   # ---------------------------------------------------------------------------
+  #TODO Tira essa busca do inventario, usa so o tabela_resumo
   estacoes_map <- inventario |>
     left_join(tabela_resumo, by = "station_code") |>
     mutate(abs_tau = abs(tau_mk))

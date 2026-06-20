@@ -90,10 +90,12 @@ message("\n=== Etapa 4: Snap hidrológico das estações ===")
 analysed_stations <- sfarrow::st_read_parquet(
   path(dirs$consolidated_dir, paste0(RUN_NAME, "_disponibilidade_spatial.parquet"))
 )
-
-# Aplica o filtro de tamanho de bacia definido nos limiares
-estacoes_foco <- analysed_stations |> 
-  dplyr::filter(area_km2 > THRESHOLDS$dem_min_area_foco_km2)
+# 
+#TODO aplicar esse filtro depois que calcular o tamanho da bacia
+estacoes_foco <- filter(analysed_stations, !is.na(row_id))
+# # Aplica o filtro de tamanho de bacia definido nos limiares
+# estacoes_foco <- analysed_stations |> 
+#   dplyr::filter(area_km2 > THRESHOLDS$dem_min_area_foco_km2)
 
 # Sincroniza CRS com o DEM antes de processar espacialmente
 estacoes_dem <- sf::st_transform(estacoes_foco, terra::crs(terra::rast(PATHS_DEM$d8_accum)))

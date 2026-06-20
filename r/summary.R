@@ -19,14 +19,15 @@
 build_tabela_resumo <- function(resultados, cfg) {
   
   map_dfr(resultados, function(x) {
+    #TODO inclusão de first é uma gambiarra
     tibble(
       station_code    = x$station_code,
-      variable        = cfg$id,
+      variable        = cfg$value_col,
       tau_mk          = round(x$mann_kendall$tau, 4),
       p_valor_mk      = round(x$mann_kendall$sl,  4),
       slope_sen       = round(as.numeric(x$sens_slope$estimates), 4),
       p_valor_sen     = round(x$sens_slope$p.value, 4),
-      ponto_mudanca   = round(x$pettitt$estimate, 0),
+      ponto_mudanca   = round(x$pettitt$estimate[1], 0),
       p_valor_pettitt = round(x$pettitt$p.value,  4),
       n_anomalias     = x$n_anomalias,
       n_extremos      = x$n_extremos,

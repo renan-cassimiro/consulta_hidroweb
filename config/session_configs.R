@@ -3,10 +3,10 @@
 # =============================================================================
 
 # Altere apenas este nome para rodar o projeto inteiro para outra bacia.
-RUN_NAME <- "xingu_river" 
+RUN_NAME <- "dourada" 
 
 # Nomes dos arquivos de entrada específicos para ESTE cenário
 INPUT_FILES <- list(
-  study_area_filename = "xingu_river_study_area_bounding_box.gpkg",
-  dem_filename        = "xingu_river_study_area_bounding_box_fathomdem_30m_cog.tif"
+  study_area_filename = "bacia_amazonica_dourada_hybas_lake_sa_lev04_v1c_dissolvido.gpkg",
+  dem_filename        = "fathomdem_dourada_300m.tif"
 )
