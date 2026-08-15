@@ -358,60 +358,7 @@ if (!is.null(spatial) && "posicao_rede" %in% names(spatial)) {
 
 \FloatBarrier
 
-## Inventário das Estações de Foco
 
-```{r tabela_inventario}
-if (!is.null(tab_q_foco) && nrow(tab_q_foco) > 0) {
-
-  cols_disp <- c("station_code", "posicao_rede", "area_contrib_km2",
-                 "ordem_strahler", "tendencia", "n_anomalias", "n_extremos")
-
-  tbl_inv <- tab_q_foco |>
-    dplyr::select(dplyr::any_of(cols_disp)) |>
-    dplyr::arrange(
-      dplyr::desc(dplyr::coalesce(area_contrib_km2, 0))
-    ) |>
-    dplyr::rename_with(~ dplyr::case_when(
-      .x == "station_code"    ~ "Estação",
-      .x == "posicao_rede"    ~ "Posição",
-      .x == "area_contrib_km2"~ "Área (km²)",
-      .x == "ordem_strahler"  ~ "Strahler",
-      .x == "tendencia"       ~ "Tendência",
-      .x == "n_anomalias"     ~ "Anomalias",
-      .x == "n_extremos"      ~ "Extremos",
-      TRUE                    ~ .x
-    ))
-
-  idx_neg <- which(tab_q_foco |>
-    dplyr::arrange(dplyr::desc(dplyr::coalesce(area_contrib_km2, 0))) |>
-    dplyr::pull(tendencia) == "Negativa")
-
-  idx_pos <- which(tab_q_foco |>
-    dplyr::arrange(dplyr::desc(dplyr::coalesce(area_contrib_km2, 0))) |>
-    dplyr::pull(tendencia) == "Positiva")
-
-  kable(
-    tbl_inv,
-    format    = "latex",
-    booktabs  = TRUE,
-    longtable = TRUE,
-    caption   = "Estações de foco (Rio principal e Tributário principal) ordenadas por área de contribuição",
-    align     = c("l", "l", "r", "c", "l", "r", "r"),
-    linesep   = ""
-  ) |>
-    kable_styling(
-      latex_options = c("repeat_header", "striped", "hold_position"),
-      font_size     = 8
-    ) |>
-    row_spec(idx_neg, color = "red") |>
-    row_spec(idx_pos, color = "blue")
-}
-```
-
-\FloatBarrier
-\newpage
-
----
 
 # Disponibilidade dos Dados
 
@@ -576,6 +523,10 @@ print(p_box)
 
 \FloatBarrier
 
+## Intensidade espacial das tendências de vazão
+
+> TODO: substituir/expandir o mapa atual para representar simultaneamente direção e magnitude (Slope de Sen).
+
 ## Mapa de tendências de vazão
 
 ```{r mapa_tendencias_vazao, fig.width=8, fig.height=6, fig.cap="Direção e força da tendência de vazão. Cor = categoria. Tamanho = |tau de Mann-Kendall|."}
@@ -675,6 +626,10 @@ if (nrow(tab_rank) > 0) {
 \newpage
 
 ---
+
+## Pontos de Mudança Hidrológica (Teste de Pettitt)
+
+> TODO: inserir resultados do teste de Pettitt, mapa dos anos de ruptura e histograma da frequência dos pontos de mudança.
 
 # Anomalias e Eventos Extremos
 
@@ -1315,6 +1270,10 @@ pct_neg_p <- if (tem_precip && n_est_p > 0) round(n_neg_p / n_est_p * 100, 1) el
 `r if (!tem_precip) "\\textit{Dados de precipitação não disponíveis para este run.}"`
 
 ## Tendências de precipitação
+
+> TODO: adicionar gráfico de barras com estações em tendência positiva, negativa e não significativa.
+
+
 
 Das `r n_est_p` estações pluviométricas analisadas, `r n_neg_p`
 (`r pct_neg_p`%) apresentam tendência de queda significativa.

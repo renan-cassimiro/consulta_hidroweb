@@ -20,31 +20,49 @@ area_estudo <- sf::st_read(dirs$study_area_path)
 # 2. Execução por Variável (Vazão, Cota, Chuva)
 resultados_por_variavel <- list()
 
+states <- c("ACRE", "ALAGOAS", "AMAPÁ", "AMAZONAS", "BAHIA", "CEARÁ", 
+           "DISTRITO FEDERAL", "ESPÍRITO SANTO", "GOIÁS", "MARANHÃO", 
+           "MATO GROSSO", "MATO GROSSO DO SUL", "MINAS GERAIS", "PARÁ", 
+           "PARAÍBA", "PARANÁ", "PERNAMBUCO", "PIAUÍ", "RIO DE JANEIRO",
+           "RIO GRANDE DO NORTE", "RIO GRANDE DO SUL", "RONDÔNIA", "RORAIMA",
+           "SANTA CATARINA", "SÃO PAULO", "SERGIPE", "TOCANTINS")
+
+states <- "ACRE"
+
 for (var_id in names(VARIABLE_CONFIGS)) {
   cfg <- VARIABLE_CONFIGS[[var_id]]
+  var_dir <- dirs$vars[[var_id]]
   
   message(sprintf("\n====== %s ======", toupper(var_id)))
   
   # Fase 1: Ingestão
-  inv <- obter_inventario(cfg, area_estudo)
+  inv <- obter_inventario(cfg, states)
   
+  df_raw <- download_station_data(cfg, inv)
   
-  df_bruto <- baixar_e_organizar(
-    cfg        = cfg,
-    inventario = inv,
-    run_name   = RUN_NAME,
-    raw_dir    = dirs$var_dirs$raw_dir,
-    org_dir    = dirs$var_dirs$org_dir
+  # Persiste dados brutos
+  walk2(df_raw, names(df_raw),
+    ~ write_parquet(.x, path(var_dir$raw_dir, paste0(RUN_NAME, "_", .y, ".parquet")),
+        compression = "zstd"))
+  
+  org_data <- organize_station_data(cfg, df_raw)
+
+  # Persiste dados organizados
+  walk2(org_data, names(org_data),
+    ~ write_parquet(.x, path(var_dir$org_dir, paste0(RUN_NAME, "_", .y, ".parquet")),
+      compression = "zstd"
+    )
   )
   
-  df_limpo <- selecionar_estacoes(cfg, df_bruto)
-    
+  message(sprintf("[%s] Download concluído: %d estações salvas em %s", cfg$label, length(org_data), dirs$var_dirs$org_dir))
+  
+  selected_data <- selecionar_estacoes(cfg, org_data)
   
   # Salvar parquets intermediários
   # arrow::write_parquet(df_limpo, paste0(dirs$data, "/", var_id, "_limpo.parquet"))
   
   # Fase 2: Análise
-  resultados <- analisar_todas_estacoes(cfg, df_limpo)
+  resultados <- analisar_todas_estacoes(cfg, selected_data)
   
   # -- 4e. Tabela resumo + séries empilhadas --------------------------------
   tabela_resumo    <- build_tabela_resumo(resultados, cfg)

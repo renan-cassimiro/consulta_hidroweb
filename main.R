@@ -1,5 +1,5 @@
 # Variável global de controle para toda a rodada
-RUN_NAME <- "dourada"
+RUN_NAME <- "jacare_guacu"
 
 # Passo 1: Dados da ANA e Estatística de Tendência
 source("scripts/01_ana_pipeline.R")

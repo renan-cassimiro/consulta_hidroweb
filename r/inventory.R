@@ -23,17 +23,20 @@
 #'
 #' @return Objeto sf com o inventário de estações.
 # -----------------------------------------------------------------------------
-obter_inventario <- function(cfg, area_estudo, estacoes_filtradas = NULL) {
+obter_inventario <- function(cfg, states, estacoes_filtradas = NULL) {
   
   message(sprintf("[%s] Consultando inventário (stationType = '%s')...",
                   cfg$label, cfg$station_type))
   
   inventario <- inventory(
+    states = states,
     stationType = cfg$station_type,
-    as_sf       = TRUE,
-    aoi         = area_estudo
+    as_sf       = TRUE
   )
   
+  
+  #Baixar tudo e filtrar por data, a função acima tem um defeito de não estar 
+  #aceitando o AOI
   if (!is.null(estacoes_filtradas)) {
     n_antes <- nrow(inventario)
     inventario <- inventario |>
@@ -45,6 +48,28 @@ obter_inventario <- function(cfg, area_estudo, estacoes_filtradas = NULL) {
   inventario
 }
 
+# -----------------------------------------------------------------------------
+#' Baixa as séries históricas de uma variável
+#'
+#' Executa stationsData()
+#'
+#' @param cfg         Lista de configuração da variável (de VARIABLE_CONFIGS).
+#' @param inventario  Objeto sf retornado por obter_inventario().
+#' @param run_name    character. Prefixo usado nos nomes dos arquivos.
+#' @param raw_dir     Caminho para salvar dados brutos por estação.
+#'
+#' @return Lista de data.frames organizados (resultado de organize()),
+#'         nomeada pelo código de cada estação.
+# -----------------------------------------------------------------------------
+download_station_data <- function(cfg, inventory) {
+  
+  message(sprintf("[%s] Baixando séries históricas (%d estações)...", cfg$label, nrow(inventory)))
+  raw_data <- stationsData(inventoryResult = inventory, waterLevel = cfg$water_level)
+
+  return(raw_data)
+}
+
+
 
 # -----------------------------------------------------------------------------
 #' Baixa, organiza e persiste as séries históricas de uma variável
@@ -53,54 +78,17 @@ obter_inventario <- function(cfg, area_estudo, estacoes_filtradas = NULL) {
 #' em parquet (dados brutos e organizados).
 #'
 #' @param cfg         Lista de configuração da variável (de VARIABLE_CONFIGS).
-#' @param inventario  Objeto sf retornado por obter_inventario().
-#' @param run_name    character. Prefixo usado nos nomes dos arquivos.
-#' @param raw_dir     Caminho para salvar dados brutos por estação.
-#' @param org_dir     Caminho para salvar dados organizados por estação.
+#' @param raw_data    Lista com os dados das estações.
 #'
 #' @return Lista de data.frames organizados (resultado de organize()),
 #'         nomeada pelo código de cada estação.
 # -----------------------------------------------------------------------------
-baixar_e_organizar <- function(cfg, inventario, run_name, raw_dir, org_dir) {
-  
-  message(sprintf("[%s] Baixando séries históricas (%d estações)...",
-                  cfg$label, nrow(inventario)))
-  
-  dados_brutos <- stationsData(
-    inventoryResult = inventario,
-    waterLevel      = cfg$water_level
-  )
-  
-  # Persiste dados brutos
-  walk2(
-    dados_brutos,
-    names(dados_brutos),
-    ~ write_parquet(
-      .x,
-      path(raw_dir, paste0(run_name, "_", .y, ".parquet")),
-      compression = "zstd"
-    )
-  )
+organize_station_data <- function(cfg, raw_data) {
   
   message(sprintf("[%s] Organizando dados...", cfg$label))
+  org_data <- organize(raw_data)
   
-  dados_org <- organize(dados_brutos)
-  
-  # Persiste dados organizados
-  walk2(
-    dados_org,
-    names(dados_org),
-    ~ write_parquet(
-      .x,
-      path(org_dir, paste0(run_name, "_", .y, ".parquet")),
-      compression = "zstd"
-    )
-  )
-  
-  message(sprintf("[%s] Download concluído: %d estações salvas em %s",
-                  cfg$label, length(dados_org), org_dir))
-  
-  dados_org
+  return(org_data)
 }
 
 

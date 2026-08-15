@@ -90,6 +90,7 @@ setup_dirs <- function(run_name,
     list(
       raw_dir      = raw_dir,
       org_dir      = org_dir,
+      org_inventario   = path(dirs$data_dir, paste0(run_name, "_organized_inventario_", cfg$id, ".parquet")),
       inventario   = path(dirs$data_dir, paste0(run_name, "_inventario_", cfg$id, ".parquet")),
       resumo       = path(output_dir,    paste0("resumo_disponibilidade_", cfg$id, ".parquet"))
     )
