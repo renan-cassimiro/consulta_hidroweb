@@ -20,14 +20,7 @@ area_estudo <- sf::st_read(dirs$study_area_path)
 # 2. Execução por Variável (Vazão, Cota, Chuva)
 resultados_por_variavel <- list()
 
-states <- c("ACRE", "ALAGOAS", "AMAPÁ", "AMAZONAS", "BAHIA", "CEARÁ", 
-           "DISTRITO FEDERAL", "ESPÍRITO SANTO", "GOIÁS", "MARANHÃO", 
-           "MATO GROSSO", "MATO GROSSO DO SUL", "MINAS GERAIS", "PARÁ", 
-           "PARAÍBA", "PARANÁ", "PERNAMBUCO", "PIAUÍ", "RIO DE JANEIRO",
-           "RIO GRANDE DO NORTE", "RIO GRANDE DO SUL", "RONDÔNIA", "RORAIMA",
-           "SANTA CATARINA", "SÃO PAULO", "SERGIPE", "TOCANTINS")
-
-states <- "ACRE"
+states <- c("ACRE", "AMAZONAS", "MATO GROSSO",  "RONDÔNIA")
 
 for (var_id in names(VARIABLE_CONFIGS)) {
   cfg <- VARIABLE_CONFIGS[[var_id]]
@@ -38,7 +31,20 @@ for (var_id in names(VARIABLE_CONFIGS)) {
   # Fase 1: Ingestão
   inv <- obter_inventario(cfg, states)
   
-  df_raw <- download_station_data(cfg, inv)
+  area_estudo <- sf::st_read(dirs$study_area_path, quiet = TRUE)
+  area_estudo <- st_transform(area_estudo, st_crs(inv))
+  
+  inventario_area <- st_filter(inv, area_estudo, .predicate = st_intersects)
+  
+  # Mapa rápido de conferência do inventário
+  ggplot() +
+    geom_sf(data = inv, color="black") +
+    geom_sf(data = inventario_area, color="yellow") +
+    geom_sf(data = area_estudo, fill = NA, color = "red") +
+    theme_classic()
+  
+  
+  df_raw <- download_station_data(cfg, inventario_area)
   
   # Persiste dados brutos
   walk2(df_raw, names(df_raw),
@@ -110,7 +116,7 @@ for (var_id in names(VARIABLE_CONFIGS)) {
     graficos <- gerar_graficos(
       tabela_resumo    = tabela_resumo,
       dados_empilhados = dados_empilhados,
-      inventario       = inv,
+      inventario       = inventario_area,
       area_estudo      = area_estudo,
       cfg              = cfg,
       rios             = rios,

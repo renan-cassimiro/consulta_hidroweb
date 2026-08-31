@@ -31,7 +31,6 @@
 #'   $spatial — objeto sf com geometria + atributos wide (ou NULL se sem inventário)
 # -----------------------------------------------------------------------------
 consolidar_resultados <- function(resumos_list, inventario_list = NULL) {
-  
   # --- 1. Formato longo -------------------------------------------------------
   # Simplesmente empilha os resumos (já têm a coluna `variable`)
   resumo_long <- bind_rows(resumos_list)
@@ -140,7 +139,6 @@ ler_consolidado <- function(run_name = RUN_NAME,
                             dirs = setup_dirs(run_name)) {
   
   message("\n====== [1/4] Carregando arquivos estáticos locais ======")
-  
   # 1. Camadas Geográficas Básicas
   area_estudo <- sf::st_read(dirs$study_area_path, quiet = TRUE)
   
@@ -187,6 +185,7 @@ ler_consolidado <- function(run_name = RUN_NAME,
     VARIABLE_CONFIGS[active_vars],
     function(cfg) {
       message(sprintf("  -> Processando cache de: %s", cfg$label))
+      
       var_dirs <- dirs$vars[[cfg$id]]
       
       inventario <- spatial_consolidado |>

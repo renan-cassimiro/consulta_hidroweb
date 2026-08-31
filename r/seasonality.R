@@ -63,7 +63,6 @@ calcular_metricas_anuais <- function(df, value_col, start_month = 1, min_obs = 3
 processar_sazonalidade_pipeline <- function(cfg, var_dirs, min_obs = 300) {
   
   message(sprintf("\n>>> Extraindo Sazonalidade (Jornalismo): %s", cfg$label))
-  
   value_col <- cfg$value_col
   variable <- cfg$id
   arquivos  <- list.files(var_dirs$vars[[variable]]$org_dir, pattern = "\\.parquet$", full.names = TRUE)

@@ -523,9 +523,9 @@ print(p_box)
 
 \FloatBarrier
 
-## Intensidade espacial das tendências de vazão
+<!-- ## Intensidade espacial das tendências de vazão -->
 
-> TODO: substituir/expandir o mapa atual para representar simultaneamente direção e magnitude (Slope de Sen).
+<!-- > TODO: substituir/expandir o mapa atual para representar simultaneamente direção e magnitude (Slope de Sen). -->
 
 ## Mapa de tendências de vazão
 
@@ -627,9 +627,9 @@ if (nrow(tab_rank) > 0) {
 
 ---
 
-## Pontos de Mudança Hidrológica (Teste de Pettitt)
+<!-- ## Pontos de Mudança Hidrológica (Teste de Pettitt) -->
 
-> TODO: inserir resultados do teste de Pettitt, mapa dos anos de ruptura e histograma da frequência dos pontos de mudança.
+<!-- > TODO: inserir resultados do teste de Pettitt, mapa dos anos de ruptura e histograma da frequência dos pontos de mudança. -->
 
 # Anomalias e Eventos Extremos
 
@@ -1269,9 +1269,9 @@ pct_neg_p <- if (tem_precip && n_est_p > 0) round(n_neg_p / n_est_p * 100, 1) el
 
 `r if (!tem_precip) "\\textit{Dados de precipitação não disponíveis para este run.}"`
 
-## Tendências de precipitação
+<!-- ## Tendências de precipitação -->
 
-> TODO: adicionar gráfico de barras com estações em tendência positiva, negativa e não significativa.
+<!-- > TODO: adicionar gráfico de barras com estações em tendência positiva, negativa e não significativa. -->
 
 
 

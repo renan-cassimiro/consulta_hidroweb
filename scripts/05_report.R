@@ -10,7 +10,6 @@ source("R/consolidate.R") # Carrega a nova função desenvolvida
 source("R/inventory.R")
 source("R/seasonality.R")
 
-
 # Definições Locais de Execução (Sobrescreve se necessário)
 VARIAVEIS_ATIVAS <- c("discharge", "water_level", "precipitation")
 
@@ -92,15 +91,6 @@ View( estacoes_snap |> dplyr::filter(!is.na(area_contrib_km2)))
 
 message("\n>>> Success! Relatório gerado dinamicamente em: ", dir_saida, "/", arquivo_pdf)
 
-
-
-
-
-
-
-
-
-# 
 # resumos_list     <- map(dados_cache$resultados_por_variavel, "tabela_resumo")
 # inventarios_list <- map(dados_cache$resultados_por_variavel, "inventario")
 # 
@@ -108,7 +98,5 @@ message("\n>>> Success! Relatório gerado dinamicamente em: ", dir_saida, "/", a
 #   resumos_list    = resumos_list,
 #   inventario_list = inventarios_list)
 # 
-# 
 # salvar_consolidado(dados_cache$consolidado, dirs$consolidated_dir, RUN_NAME)
 # 
-
